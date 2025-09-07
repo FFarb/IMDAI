@@ -1,0 +1,29 @@
+{
+  "Cyberpunk Mercenary": {
+    "subject": "A female mercenary with cybernetic enhancements",
+    "style": "Cyberpunk, gritty, neon-noir, detailed concept art",
+    "composition": "Medium shot, dynamic pose, looking towards the viewer",
+    "lighting": "Dramatic neon lighting, harsh shadows, volumetric light from rainy streets",
+    "mood": "Determined, intense, somber",
+    "details": "Rain-slicked chrome, glowing holographic ads in the background, worn leather jacket",
+    "quality": "masterpiece, 8k, absurdly detailed"
+  },
+  "Enchanted Forest": {
+    "subject": "A majestic glowing stag",
+    "style": "Fantasy, ethereal, painterly style similar to Studio Ghibli",
+    "composition": "Centered subject, surrounded by ancient, moss-covered trees",
+    "lighting": "Soft, magical moonlight filtering through the canopy, bioluminescent mushrooms providing accent light",
+    "mood": "Mystical, serene, enchanting",
+    "details": "Floating dust motes, intricate patterns on the stag's antlers, sparkling magical energy",
+    "quality": "best quality, 4k, beautiful illustration"
+  },
+  "Vintage Sci-Fi Poster": {
+    "subject": "A retro-futuristic rocket ship taking off from a barren alien planet",
+    "style": "1950s science fiction book cover art, vintage poster design, pulp art",
+    "composition": "Low angle shot, emphasizing the scale of the rocket, two suns in the sky",
+    "lighting": "Bright, high-contrast sunlight from two sources",
+    "mood": "Adventurous, optimistic, sense of discovery",
+    "details": "Simple geometric shapes, bold colors, halftone dot patterns, weathered paper texture",
+    "quality": "retro, vintage, high resolution scan"
+  }
+}
