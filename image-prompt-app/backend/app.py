@@ -6,16 +6,15 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import openai
 
 # --- Configuration & Initialization ---
 logging.basicConfig(level=logging.INFO)
 load_dotenv()
 
-# In-memory storage for API key (for MVP dev purposes)
-# In production, use a more secure method.
 API_KEY_STORE = {"api_key": os.getenv("OPENAI_API_KEY")}
+PRESETS_FILE = "../presets.json" # Path to presets file in the root folder
 
 app = FastAPI()
 client = None
@@ -33,13 +32,12 @@ def initialize_openai_client():
         client = None
         logging.warning("OpenAI client not initialized. API key is missing.")
 
-# Initialize on startup
 initialize_openai_client()
 
 # --- CORS Middleware ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # Vite dev server
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -70,9 +68,19 @@ class PromptDTO(BaseModel):
 
 class ImageRequest(BaseModel):
     prompt: PromptDTO
+    n: int = Field(1, ge=1, le=4) # Number of images to generate
 
 class ApiKey(BaseModel):
     api_key: str
+
+class PresetSaveRequest(BaseModel):
+    name: str
+    slots: Slots
+
+class ImageWithPrompt(BaseModel):
+    image_path: str
+    prompt: Optional[PromptDTO] = None
+
 
 # --- Helper Functions ---
 def create_directories():
@@ -103,23 +111,21 @@ Here are the input slots:
 # --- API Endpoints ---
 @app.post("/api/settings/key")
 async def set_api_key(key: ApiKey):
-    """Accept API key from frontend and store it server-side."""
     if not key.api_key:
         raise HTTPException(status_code=400, detail="API key cannot be empty.")
     API_KEY_STORE["api_key"] = key.api_key
-    initialize_openai_client() # Re-initialize client with the new key
+    initialize_openai_client()
     return {"message": "API key updated successfully."}
 
 
 @app.post("/api/assemble", response_model=PromptDTO)
 async def assemble_prompt(slots: Slots):
-    """Assembles a detailed prompt using GPT."""
     if not client:
         raise HTTPException(status_code=400, detail="OpenAI client not initialized. Please set API key.")
 
     content = MASTER_PROMPT_TEMPLATE.format(**slots.dict())
 
-    for attempt in range(2): # Main attempt + 1 repair pass
+    for attempt in range(2):
         try:
             response = client.chat.completions.create(
                 model="gpt-4-turbo-preview",
@@ -130,11 +136,8 @@ async def assemble_prompt(slots: Slots):
             response_text = response.choices[0].message.content
             data = json.loads(response_text)
 
-            # Validate required keys
             if all(k in data for k in ["positive", "negative", "params"]):
-                # Merge base negative prompt
                 data["negative"] = f"{BASE_NEG}, {data.get('negative', '')}".strip(', ')
-                # Ensure default params are present
                 final_params = DEFAULT_PARAMS.copy()
                 final_params.update(data.get("params", {}))
                 data["params"] = final_params
@@ -145,7 +148,6 @@ async def assemble_prompt(slots: Slots):
         except (json.JSONDecodeError, ValueError) as e:
             logging.error(f"Attempt {attempt + 1}: Failed to parse JSON. Error: {e}")
             if attempt == 0:
-                # On first failure, ask the model to repair it
                 content += f"\n\nThe previous attempt failed. Please fix the JSON output. It must be a valid JSON object with keys 'positive', 'negative', and 'params'. The error was: {e}. Raw output was: {response_text}"
             else:
                 raise HTTPException(status_code=500, detail="Failed to generate valid prompt from LLM after repair attempt.")
@@ -155,58 +157,98 @@ async def assemble_prompt(slots: Slots):
 
 @app.post("/api/image")
 async def generate_image(req: ImageRequest):
-    """Generates an image using OpenAI Images API."""
     if not client:
         raise HTTPException(status_code=400, detail="OpenAI client not initialized. Please set API key.")
 
     try:
         prompt = req.prompt
         response = client.images.generate(
-            model="dall-e-3", # As per user request, this would be gpt-image-1, but dall-e-3 is the current name.
+            model="dall-e-3",
             prompt=prompt.positive,
-            n=1,
+            n=req.n,
             size=prompt.params.get("size", "1024x1024"),
             quality=prompt.params.get("quality", "standard"),
             style=prompt.params.get("style", "vivid"),
         )
 
-        image_url = response.data[0].url
-
-        # For a local app, we'd typically download the image.
-        # This MVP will just pass the URL back for simplicity, but a real app should save it.
-        # Let's save it to show the full local flow.
+        saved_files = []
         import httpx
         async with httpx.AsyncClient() as http_client:
-            image_response = await http_client.get(image_url)
-            image_response.raise_for_status()
+            for i, image_data in enumerate(response.data):
+                image_url = image_data.url
+                image_response = await http_client.get(image_url)
+                image_response.raise_for_status()
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{timestamp}.png"
-        filepath = os.path.join("data", "outputs", filename)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                base_filename = f"{timestamp}_{i+1}"
+                image_filename = f"{base_filename}.png"
+                json_filename = f"{base_filename}.json"
 
-        with open(filepath, "wb") as f:
-            f.write(image_response.content)
+                image_filepath = os.path.join("data", "outputs", image_filename)
+                json_filepath = os.path.join("data", "outputs", json_filename)
 
-        return {"image_path": f"/images/{filename}", "prompt": prompt.dict()}
+                with open(image_filepath, "wb") as f:
+                    f.write(image_response.content)
+
+                with open(json_filepath, "w") as f:
+                    json.dump(prompt.dict(), f, indent=2)
+
+                saved_files.append({"image_path": f"/images/{image_filename}", "prompt": prompt.dict()})
+
+        return saved_files
 
     except Exception as e:
         logging.error(f"Image generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/images", response_model=List[str])
+@app.get("/api/images", response_model=List[ImageWithPrompt])
 async def get_images():
-    """Returns a list of generated image filenames."""
     image_dir = "data/outputs"
+    results = []
     if not os.path.isdir(image_dir):
         return []
 
-    files = sorted(
-        [f"/images/{f}" for f in os.listdir(image_dir) if f.lower().endswith(".png")],
-        reverse=True
-    )
-    return files
+    filenames = sorted(os.listdir(image_dir), reverse=True)
 
-# Serve static images from the data/outputs directory
+    for filename in filenames:
+        if filename.lower().endswith(".png"):
+            image_path = f"/images/{filename}"
+            json_path = os.path.join(image_dir, filename.replace(".png", ".json"))
+
+            prompt_data = None
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, "r") as f:
+                        prompt_data = json.load(f)
+                except json.JSONDecodeError:
+                    logging.error(f"Could not decode JSON for {filename}")
+
+            results.append(ImageWithPrompt(image_path=image_path, prompt=prompt_data))
+
+    return results
+
+@app.post("/api/presets")
+async def save_preset(req: PresetSaveRequest):
+    if not req.name.strip():
+        raise HTTPException(status_code=400, detail="Preset name cannot be empty.")
+
+    try:
+        presets = {}
+        if os.path.exists(PRESETS_FILE):
+            with open(PRESETS_FILE, "r", encoding='utf-8') as f:
+                presets = json.load(f)
+
+        presets[req.name] = req.slots.dict()
+
+        with open(PRESETS_FILE, "w", encoding='utf-8') as f:
+            json.dump(presets, f, indent=2)
+
+        return {"message": "Preset saved successfully."}
+    except Exception as e:
+        logging.error(f"Failed to save preset: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save preset.")
+
+
 from fastapi.staticfiles import StaticFiles
 app.mount("/images", StaticFiles(directory="data/outputs"), name="images")

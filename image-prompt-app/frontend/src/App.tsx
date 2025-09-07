@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import SettingsModal from './components/SettingsModal';
+import ColorPicker from './components/ColorPicker';
+import GalleryItem from './components/GalleryItem';
 
 // --- Data Types ---
 interface Slots {
@@ -19,7 +21,12 @@ interface PromptDTO {
   params: Record<string, any>;
 }
 
-const API_BASE_URL = 'http://localhost:8000'; // For direct image URLs
+interface ImageWithPrompt {
+  image_path: string;
+  prompt: PromptDTO | null;
+}
+
+const API_BASE_URL = 'http://localhost:8000';
 
 function App() {
   const [slots, setSlots] = useState<Slots>({
@@ -27,12 +34,13 @@ function App() {
     mood: '', details: '', quality: 'best quality, 4k'
   });
   const [assembledPrompt, setAssembledPrompt] = useState<PromptDTO | null>(null);
-  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [galleryImages, setGalleryImages] = useState<ImageWithPrompt[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [presets, setPresets] = useState<Record<string, Slots>>({});
   const [showSettings, setShowSettings] = useState(false);
-  const [apiKeyIsSet, setApiKeyIsSet] = useState(false); // Assume not set initially
+  const [newPresetName, setNewPresetName] = useState('');
+  const [numImages, setNumImages] = useState(1); // State for number of images
 
   // --- Effects ---
   useEffect(() => {
@@ -43,7 +51,7 @@ function App() {
   // --- API Functions ---
   const fetchGalleryImages = async () => {
     try {
-      const response = await axios.get<string[]>('/api/images');
+      const response = await axios.get<ImageWithPrompt[]>('/api/images');
       setGalleryImages(response.data);
     } catch (err) {
       console.error('Failed to fetch images', err);
@@ -52,7 +60,8 @@ function App() {
 
   const fetchPresets = async () => {
     try {
-      const response = await fetch('/presets.json');
+      const response = await fetch(`/presets.json?t=${new Date().getTime()}`);
+      if (!response.ok) throw new Error("Network response was not ok");
       const data = await response.json();
       setPresets(data);
     } catch (err) {
@@ -68,7 +77,6 @@ function App() {
       setAssembledPrompt(response.data);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to assemble prompt.');
-      console.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -79,13 +87,31 @@ function App() {
     setIsLoading(true);
     setError(null);
     try {
-      await axios.post('/api/image', { prompt: assembledPrompt });
-      fetchGalleryImages(); // Refresh gallery after generation
+      // Pass the number of images to the backend
+      await axios.post('/api/image', { prompt: assembledPrompt, n: numImages });
+      fetchGalleryImages();
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to generate image.');
-      console.error(err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSavePreset = async () => {
+    if (!newPresetName.trim()) {
+      setError("Please enter a name for the preset.");
+      return;
+    }
+    setError(null);
+    setIsLoading(true);
+    try {
+        await axios.post('/api/presets', { name: newPresetName, slots });
+        setNewPresetName('');
+        await fetchPresets();
+    } catch (err: any) {
+        setError(err.response?.data?.detail || 'Failed to save preset.');
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -103,7 +129,7 @@ function App() {
 
   return (
     <div className="app-container">
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onApiKeyUpdate={() => setApiKeyIsSet(true)} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onApiKeyUpdate={() => {}} />}
 
       <aside className="controls">
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
@@ -120,6 +146,21 @@ function App() {
             ))}
           </select>
         </div>
+        <div className="form-group">
+            <label>Save Current as Preset</label>
+            <div style={{display: 'flex'}}>
+                <input
+                    type="text"
+                    placeholder="New preset name..."
+                    value={newPresetName}
+                    onChange={(e) => setNewPresetName(e.target.value)}
+                    style={{borderTopRightRadius: 0, borderBottomRightRadius: 0}}
+                />
+                <button onClick={handleSavePreset} disabled={isLoading} style={{borderTopLeftRadius: 0, borderBottomLeftRadius: 0}}>
+                    Save
+                </button>
+            </div>
+        </div>
 
         {Object.keys(slots).map((key) => (
           <div className="form-group" key={key}>
@@ -134,6 +175,8 @@ function App() {
           </div>
         ))}
 
+        <ColorPicker />
+
         <button onClick={handleAssemble} disabled={isLoading}>
           {isLoading ? 'Assembling...' : 'Assemble Prompt'}
         </button>
@@ -145,8 +188,23 @@ function App() {
           {assembledPrompt ? JSON.stringify(assembledPrompt, null, 2) : 'Click "Assemble" to generate a prompt.'}
         </div>
 
+        <div className="form-group">
+          <label htmlFor="numImages">Number of Images (1-4)</label>
+          <select
+            id="numImages"
+            value={numImages}
+            onChange={(e) => setNumImages(parseInt(e.target.value, 10))}
+            disabled={!assembledPrompt || isLoading}
+          >
+            <option value={1}>1</option>
+            <option value={2}>2</option>
+            <option value={3}>3</option>
+            <option value={4}>4</option>
+          </select>
+        </div>
+
         <button onClick={handleGenerate} disabled={!assembledPrompt || isLoading}>
-          {isLoading ? 'Generating...' : 'Generate Image'}
+          {isLoading ? `Generating ${numImages}...` : `Generate ${numImages} Image(s)`}
         </button>
         {error && <p style={{ color: 'red' }}>{error}</p>}
       </aside>
@@ -154,8 +212,13 @@ function App() {
       <main className="gallery">
         <h2>Gallery</h2>
         <div className="gallery-grid">
-          {galleryImages.map((imgPath) => (
-            <img key={imgPath} src={`${API_BASE_URL}${imgPath}`} alt="Generated art" />
+          {galleryImages.map((item) => (
+            <GalleryItem
+              key={item.image_path}
+              imagePath={item.image_path}
+              prompt={item.prompt}
+              apiBaseUrl={API_BASE_URL}
+            />
           ))}
         </div>
       </main>

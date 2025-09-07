@@ -107,3 +107,139 @@ button:disabled { background-color: #444; cursor: not-allowed; }
   gap: 1rem;
   width: 400px;
 }
+
+/* Color Picker Styles */
+.color-picker-container {
+  background-color: #2f2f2f;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+.color-picker-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+.color-input {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+}
+.color-input::-webkit-color-swatch {
+  border-radius: 4px;
+  border: 1px solid #555;
+}
+.color-input::-moz-color-swatch {
+  border-radius: 4px;
+  border: 1px solid #555;
+}
+.color-display {
+  width: 100%;
+  height: 50px;
+  border-radius: 4px;
+  border: 1px solid #555;
+}
+.hex-code-wrapper {
+  display: flex;
+  margin-top: 1rem;
+}
+.hex-code-wrapper input {
+  border-right: none;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.hex-code-wrapper button {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* Gallery Item Styles */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(256px, 1fr));
+  gap: 1.5rem;
+}
+
+.gallery-item {
+  position: relative;
+  background-color: #333;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.gallery-item img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.view-prompt-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  z-index: 10;
+}
+
+.gallery-item:hover .view-prompt-btn {
+  opacity: 1;
+}
+
+.prompt-overlay {
+  background-color: rgba(20, 20, 20, 0.95);
+  padding: 1rem;
+  font-size: 0.8rem;
+}
+.prompt-overlay h5 {
+  margin: 0 0 0.25rem 0;
+  color: #888;
+  text-transform: uppercase;
+}
+.prompt-overlay p {
+  margin: 0 0 1rem 0;
+  word-break: break-word;
+}
+
+/* Gallery Item Button Group Styles */
+.button-group {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  z-index: 10;
+}
+.gallery-item:hover .button-group {
+  opacity: 1;
+}
+.gallery-item-btn {
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.gallery-item-btn:hover {
+  background-color: rgba(0, 0, 0, 0.8);
+}

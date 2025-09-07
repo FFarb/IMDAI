@@ -7,7 +7,11 @@ This is a local browser app to assemble a style-aware image prompt with GPT and 
 -   **Style-Aware Prompting**: Uses a powerful GPT model to turn simple keywords into detailed, effective prompts.
 -   **Local Generation**: Runs a local backend and frontend for privacy and control.
 -   **Image Gallery**: Stores and displays all your generated images locally.
--   **Presets**: Save and load your favorite slot combinations.
+-   **Generate up to 4 Images**: Create multiple image variations from a single prompt in one go.
+-   **Download Images**: Save your favorite creations directly to your computer.
+-   **Preset Management**: Save your favorite slot combinations as named presets and load them anytime.
+-   **View Prompts**: See the exact prompt used to generate any image in your gallery.
+-   **Color Palette**: A handy color picker to find and copy HEX codes for your prompts.
 
 ## Tech Stack
 
@@ -42,7 +46,10 @@ python -m venv venv
 pip install -r requirements.txt
 
 # Create your environment file
+# On Mac/Linux
 cp .env.example .env
+# On Windows
+copy .env.example .env
 ```
 
 Now, **edit the `.env` file** and add your OpenAI API key.
@@ -85,7 +92,11 @@ The frontend development server will start on `http://localhost:5173`. Open this
 
 1.  The app will open. Click the **settings icon (⚙️)** in the top right.
 2.  Enter your OpenAI API Key and click **Save**. The key is stored securely on the backend only.
-3.  Fill in the different "slots" on the left panel, or select a preset to get started.
-4.  Click **Assemble Prompt**. The backend GPT model will generate a detailed JSON prompt.
-5.  Review the prompt. If you like it, click **Generate Image**.
-6.  The new image will appear in the gallery on the right. All images are saved locally in `backend/data/outputs/`.
+3.  Fill in the different "slots" on the left panel, or select a pre-made preset from the dropdown.
+4.  Use the **Color Palette** to find the perfect color and copy its HEX code into your prompt slots.
+5.  To save your current slots for later, type a name in the "Save Current as Preset" field and click **Save**.
+6.  Click **Assemble Prompt**. The backend GPT model will generate a detailed JSON prompt.
+7.  Select the **Number of Images** you'd like to create (1-4).
+8.  Click **Generate Image(s)**.
+9.  Your new images will appear in the gallery. Hover over any image to see buttons to **View Prompt** or **Download** it.
+10. All images and their prompt data are saved locally in `backend/data/outputs/`.
