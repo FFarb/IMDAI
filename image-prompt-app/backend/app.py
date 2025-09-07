@@ -92,9 +92,9 @@ MASTER_PROMPT_TEMPLATE = """
 You are an expert image prompt generator. Your task is to take a set of input 'slots' and combine them into a coherent, high-quality positive and negative prompt for an AI image generator. The user wants a style-aware prompt.
 
 Return ONLY a valid JSON object with three keys: "positive", "negative", and "params".
-- "positive": A detailed, comma-separated string for the main image prompt.
+- "positive": A detailed, comma-separated string for the main image prompt. Integrate the user's 'Quality' input (e.g., '4k, best quality') directly into this positive prompt string.
 - "negative": A detailed, comma-separated string for things to avoid.
-- "params": A JSON object containing image generation parameters.
+- "params": A JSON object for technical settings. This object should ONLY contain keys for 'size' and 'style' if specified. Do NOT include a 'quality' key in this params object.
 
 Do not include any other text, explanations, or markdown.
 

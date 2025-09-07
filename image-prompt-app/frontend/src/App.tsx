@@ -31,7 +31,7 @@ const API_BASE_URL = 'http://localhost:8000';
 function App() {
   const [slots, setSlots] = useState<Slots>({
     subject: '', style: '', composition: '', lighting: '',
-    mood: '', details: '', quality: 'best quality, 4k'
+    mood: '', details: '', quality: 'masterpiece, high detail, 8k' // Updated default quality text
   });
   const [assembledPrompt, setAssembledPrompt] = useState<PromptDTO | null>(null);
   const [galleryImages, setGalleryImages] = useState<ImageWithPrompt[]>([]);
@@ -40,7 +40,8 @@ function App() {
   const [presets, setPresets] = useState<Record<string, Slots>>({});
   const [showSettings, setShowSettings] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
-  const [numImages, setNumImages] = useState(1); // State for number of images
+  const [numImages, setNumImages] = useState(1);
+  const [apiQuality, setApiQuality] = useState<'standard' | 'hd'>('hd'); // New state for API quality parameter
 
   // --- Effects ---
   useEffect(() => {
@@ -74,7 +75,12 @@ function App() {
     setError(null);
     try {
       const response = await axios.post<PromptDTO>('/api/assemble', slots);
-      setAssembledPrompt(response.data);
+      const promptData = response.data;
+
+      // *** FIX: Manually override the quality param to ensure it's valid ***
+      promptData.params.quality = apiQuality;
+
+      setAssembledPrompt(promptData);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to assemble prompt.');
     } finally {
@@ -87,7 +93,6 @@ function App() {
     setIsLoading(true);
     setError(null);
     try {
-      // Pass the number of images to the backend
       await axios.post('/api/image', { prompt: assembledPrompt, n: numImages });
       fetchGalleryImages();
     } catch (err: any) {
@@ -186,6 +191,20 @@ function App() {
         <h3>Assembled Prompt</h3>
         <div className="prompt-display">
           {assembledPrompt ? JSON.stringify(assembledPrompt, null, 2) : 'Click "Assemble" to generate a prompt.'}
+        </div>
+
+        {/* --- NEW: API Quality Selector --- */}
+        <div className="form-group">
+          <label htmlFor="apiQuality">Image Quality (API Setting)</label>
+          <select
+            id="apiQuality"
+            value={apiQuality}
+            onChange={(e) => setApiQuality(e.target.value as 'standard' | 'hd')}
+            disabled={isLoading}
+          >
+            <option value="hd">HD</option>
+            <option value="standard">Standard</option>
+          </select>
         </div>
 
         <div className="form-group">
