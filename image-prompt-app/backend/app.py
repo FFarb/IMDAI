@@ -140,6 +140,13 @@ async def assemble_prompt(slots: Slots):
                 data["negative"] = f"{BASE_NEG}, {data.get('negative', '')}".strip(', ')
                 final_params = DEFAULT_PARAMS.copy()
                 final_params.update(data.get("params", {}))
+
+                # --- Defensive Check ---
+                # Ensure size is valid, otherwise default it.
+                valid_sizes = ["1024x1024", "1024x1792", "1792x1024"]
+                if final_params.get("size") not in valid_sizes:
+                    final_params["size"] = "1024x1024"
+
                 data["params"] = final_params
                 return PromptDTO(**data)
             else:

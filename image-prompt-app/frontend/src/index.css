@@ -243,3 +243,11 @@ button:disabled { background-color: #444; cursor: not-allowed; }
 .gallery-item-btn:hover {
   background-color: rgba(0, 0, 0, 0.8);
 }
+
+/* Final API Controls Grid */
+.api-controls-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
