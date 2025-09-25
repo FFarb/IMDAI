@@ -13,6 +13,7 @@ interface EditingSidebarProps {
 }
 
 const EditingSidebar: React.FC<EditingSidebarProps> = ({ imagePath, onClose, isVisible }) => {
+  console.log('[EditingSidebar] render invoked. isVisible:', isVisible, 'imagePath:', imagePath);
   // Internal state for the Etsy uploader form fields.
   const [etsyTitle, setEtsyTitle] = useState('');
   const [etsyDescription, setEtsyDescription] = useState('');

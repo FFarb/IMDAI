@@ -43,7 +43,10 @@ const GalleryItem: React.FC<GalleryItemProps> = ({ imagePath, prompt, apiBaseUrl
         src={`${apiBaseUrl}${imagePath}`}
         alt="Generated art"
         loading="lazy"
-        onClick={() => onSelectImage(imagePath)}
+        onClick={() => {
+          console.log('[GalleryItem] Image clicked:', imagePath);
+          onSelectImage(imagePath);
+        }}
         style={{ cursor: 'pointer' }}
         title="Click to edit"
       />
