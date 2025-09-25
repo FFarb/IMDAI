@@ -24,7 +24,7 @@ body {
 
 .app-container {
   display: grid;
-  grid-template-columns: 350px 1fr;
+  grid-template-columns: 350px 1fr 400px; /* From: 350px 1fr; */
   gap: 2rem;
 }
 
@@ -250,4 +250,103 @@ button:disabled { background-color: #444; cursor: not-allowed; }
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
   margin-top: 1rem;
+}
+
+/*
+ * === Editing Sidebar Styles ===
+ * Styles for the new right-hand sidebar used for image editing and uploading.
+ */
+.editing-sidebar {
+  background-color: #2f2f2f;
+  border-radius: 8px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  height: fit-content; /* Sidebar height adjusts to its content */
+  border: 1px solid #444;
+  /* Added for smooth appearance/disappearance if you add transitions later */
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #444;
+  padding-bottom: 1rem;
+  margin-bottom: -0.5rem; /* Overlap with section padding for better spacing */
+}
+
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  font-size: 2.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.close-btn:hover {
+  color: white;
+  transform: rotate(90deg);
+}
+
+.selected-image-preview img {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background-color: #242424;
+}
+
+.sidebar-section {
+  background-color: #242424;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+}
+
+.sidebar-section h4 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #aaa;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.button-group-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.button-group-vertical button {
+  width: 100%;
+}
+
+.sidebar-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  min-height: 200px;
+  color: #888;
+  border: 2px dashed #444;
+  border-radius: 8px;
+  padding: 1rem;
+  font-size: 0.9rem;
+}
+
+.editing-sidebar textarea {
+    resize: vertical;
+    min-height: 80px;
 }

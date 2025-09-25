@@ -3,6 +3,7 @@ import axios from 'axios';
 import SettingsModal from './components/SettingsModal';
 import ColorPicker from './components/ColorPicker';
 import GalleryItem from './components/GalleryItem';
+import EditingSidebar from './components/EditingSidebar';
 
 // --- Data Types ---
 interface Slots {
@@ -51,6 +52,8 @@ function App() {
   const [apiQuality, setApiQuality] = useState<ApiQuality>('hd');
   const [apiSize, setApiSize] = useState<ApiSize>('1024x1024');
   const [apiStyle, setApiStyle] = useState<ApiStyle>('vivid');
+
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   // --- Effects ---
   useEffect(() => {
@@ -132,6 +135,14 @@ function App() {
 
   const loadPreset = (presetName: string) => {
     if (presets[presetName]) { setSlots(presets[presetName]); }
+  };
+
+  const handleSelectImage = (imagePath: string) => {
+    setSelectedImage(prevSelected => (prevSelected === imagePath ? null : imagePath));
+  };
+
+  const handleCloseSidebar = () => {
+    setSelectedImage(null);
   };
 
   return (
@@ -216,9 +227,22 @@ function App() {
       <main className="gallery">
         <h2>Gallery</h2>
         <div className="gallery-grid">
-          {galleryImages.map((item) => (<GalleryItem key={item.image_path} imagePath={item.image_path} prompt={item.prompt} apiBaseUrl={API_BASE_URL} />))}
+          {galleryImages.map((item) => (
+            <GalleryItem
+              key={item.image_path}
+              imagePath={item.image_path}
+              prompt={item.prompt}
+              apiBaseUrl={API_BASE_URL}
+              onSelectImage={handleSelectImage}
+            />
+          ))}
         </div>
       </main>
+      <EditingSidebar
+        isVisible={selectedImage !== null}
+        imagePath={selectedImage}
+        onClose={handleCloseSidebar}
+      />
     </div>
   );
 }

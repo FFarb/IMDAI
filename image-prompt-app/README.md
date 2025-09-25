@@ -4,27 +4,51 @@ This is a local browser app to assemble a style-aware image prompt with GPT and 
 
 ## Features
 
--   **Style-Aware Prompting**: Uses a powerful GPT model to turn simple keywords into detailed, effective prompts.
--   **Local Generation**: Runs a local backend and frontend for privacy and control.
--   **Image Gallery**: Stores and displays all your generated images locally.
--   **Generate up to 4 Images**: Create multiple image variations from a single prompt in one go.
--   **Download Images**: Save your favorite creations directly to your computer.
--   **Preset Management**: Save your favorite slot combinations as named presets and load them anytime.
--   **View Prompts**: See the exact prompt used to generate any image in your gallery.
--   **Color Palette**: A handy color picker to find and copy HEX codes for your prompts.
+- **Style-Aware Prompting**: Uses a powerful GPT model to turn simple keywords into detailed, effective prompts.
+- **Local Generation**: Runs a local backend and frontend for privacy and control.
+- **Image Gallery**: Stores and displays all your generated images locally.
+- **Generate up to 4 Images**: Create multiple image variations from a single prompt in one go.
+- **Download Images**: Save your favorite creations directly to your computer.
+- **Preset Management**: Save your favorite slot combinations as named presets and load them anytime.
+- **View Prompts**: See the exact prompt used to generate any image in your gallery.
+- **Color Palette**: A handy color picker to find and copy HEX codes for your prompts.
+- **Editing & Upload Sidebar**: Click any gallery image to open a dedicated sidebar with post-processing tools and an Etsy upload form.
 
 ## Tech Stack
 
--   **Frontend**: React, Vite, TypeScript, Axios
--   **Backend**: FastAPI (Python)
--   **AI**: OpenAI API (Chat Completions & Images)
+- **Frontend**: React, Vite, TypeScript, Axios
+- **Backend**: FastAPI (Python)
+- **AI**: OpenAI API (Chat Completions & Images)
 
-## Quickstart
+## Editing & Upload Sidebar
+
+The new right-hand sidebar offers a focused workspace for polishing and publishing your images:
+
+- Preview the selected image at full width without leaving the page.
+- Trigger placeholder actions for common post-processing tasks like 4× upscaling and SVG conversion.
+- Prepare Etsy listings with title, description, tags, and price fields. Data is currently logged to the console until backend endpoints are available.
+- Close the sidebar or deselect the current image at any time to return to browsing the gallery.
+
+## How to Use
+
+1. The app will open. Click the **settings icon (⚙️)** in the top right.
+2. Enter your OpenAI API Key and click **Save**. The key is stored securely on the backend only.
+3. Fill in the different "slots" on the left panel, or select a pre-made preset from the dropdown.
+4. Use the **Color Palette** to find the perfect color and copy its HEX code into your prompt slots.
+5. To save your current slots for later, type a name in the "Save Current as Preset" field and click **Save**.
+6. Click **Assemble Prompt**. The backend GPT model will generate a detailed JSON prompt.
+7. Select the **Number of Images** you'd like to create (1-4).
+8. Click **Generate Image(s)**.
+9. Your new images will appear in the gallery. Hover over any image to reveal the prompt and download controls, or click the image to open the editing sidebar.
+10. Use the sidebar tools to experiment with upscale/SVG placeholders or to prepare an Etsy listing. Close the sidebar when you're done to continue browsing.
+11. All images and their prompt data are saved locally in `backend/data/outputs/`.
+
+## Installation & Running
 
 ### Prerequisites
 
--   Python 3.8+ and `pip`
--   Node.js 18+ and `npm`
+- Python 3.8+ and `pip`
+- Node.js 18+ and `npm`
 
 ### 1. Setup Backend
 
@@ -87,16 +111,3 @@ npm run dev
 ```
 
 The frontend development server will start on `http://localhost:5173`. Open this URL in your browser.
-
-### How to Use
-
-1.  The app will open. Click the **settings icon (⚙️)** in the top right.
-2.  Enter your OpenAI API Key and click **Save**. The key is stored securely on the backend only.
-3.  Fill in the different "slots" on the left panel, or select a pre-made preset from the dropdown.
-4.  Use the **Color Palette** to find the perfect color and copy its HEX code into your prompt slots.
-5.  To save your current slots for later, type a name in the "Save Current as Preset" field and click **Save**.
-6.  Click **Assemble Prompt**. The backend GPT model will generate a detailed JSON prompt.
-7.  Select the **Number of Images** you'd like to create (1-4).
-8.  Click **Generate Image(s)**.
-9.  Your new images will appear in the gallery. Hover over any image to see buttons to **View Prompt** or **Download** it.
-10. All images and their prompt data are saved locally in `backend/data/outputs/`.
