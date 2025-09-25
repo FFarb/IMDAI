@@ -24,7 +24,7 @@ body {
 
 .app-container {
   display: grid;
-  grid-template-columns: 350px 1fr;
+  grid-template-columns: 350px 1fr 300px; /* MODIFIED: Added 300px column for the new sidebar */
   gap: 2rem;
 }
 

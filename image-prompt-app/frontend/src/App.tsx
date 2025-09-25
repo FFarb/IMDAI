@@ -3,6 +3,7 @@ import axios from 'axios';
 import SettingsModal from './components/SettingsModal';
 import ColorPicker from './components/ColorPicker';
 import GalleryItem from './components/GalleryItem';
+import ProcessingSidebar from './components/ProcessingSidebar';
 
 // --- Data Types ---
 interface Slots {
@@ -219,6 +220,9 @@ function App() {
           {galleryImages.map((item) => (<GalleryItem key={item.image_path} imagePath={item.image_path} prompt={item.prompt} apiBaseUrl={API_BASE_URL} />))}
         </div>
       </main>
+
+      {/* --- Right-hand Processing Sidebar --- */}
+      <ProcessingSidebar />
     </div>
   );
 }
