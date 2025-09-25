@@ -10,15 +10,18 @@ interface EditingSidebarProps {
   imagePath: string | null;
   onClose: () => void;
   isVisible: boolean;
+  apiBaseUrl: string;
 }
 
-const EditingSidebar: React.FC<EditingSidebarProps> = ({ imagePath, onClose, isVisible }) => {
+const EditingSidebar: React.FC<EditingSidebarProps> = ({ imagePath, onClose, isVisible, apiBaseUrl }) => {
   console.log('[EditingSidebar] render invoked. isVisible:', isVisible, 'imagePath:', imagePath);
   // Internal state for the Etsy uploader form fields.
   const [etsyTitle, setEtsyTitle] = useState('');
   const [etsyDescription, setEtsyDescription] = useState('');
   const [etsyTags, setEtsyTags] = useState('');
   const [etsyPrice, setEtsyPrice] = useState('');
+  const [uploadState, setUploadState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   // Effect to reset the form fields whenever a new image is selected.
   // This prevents carrying over data from a previously selected image.
@@ -28,6 +31,8 @@ const EditingSidebar: React.FC<EditingSidebarProps> = ({ imagePath, onClose, isV
       setEtsyDescription('');
       setEtsyTags('');
       setEtsyPrice('');
+      setUploadState('idle');
+      setStatusMessage(null);
     }
   }, [imagePath]);
 
@@ -48,20 +53,66 @@ const EditingSidebar: React.FC<EditingSidebarProps> = ({ imagePath, onClose, isV
     alert(`SVG conversion requested for: ${imagePath}`);
   };
 
-  const handleUploadToEtsy = () => {
-    if (!etsyTitle.trim() || !etsyPrice.trim()) {
-        alert('"Title" and "Price" are required fields for an Etsy listing.');
-        return;
+  const handleUploadToEtsy = async () => {
+    if (!imagePath) {
+      setStatusMessage('Select an image before uploading to Etsy.');
+      setUploadState('error');
+      return;
     }
-    const etsyListingData = {
-        imagePath,
-        title: etsyTitle,
-        description: etsyDescription,
-        tags: etsyTags.split(',').map(tag => tag.trim()).filter(Boolean), // Cleans up tags
-        price: parseFloat(etsyPrice),
+
+    if (!etsyTitle.trim() || !etsyPrice.trim()) {
+      setStatusMessage('"Title" and "Price" are required fields for an Etsy listing.');
+      setUploadState('error');
+      return;
+    }
+
+    const parsedPrice = parseFloat(etsyPrice);
+    if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
+      setStatusMessage('Enter a valid price greater than 0.');
+      setUploadState('error');
+      return;
+    }
+
+    const tags = etsyTags
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(Boolean);
+
+    const payload = {
+      image_path: imagePath,
+      title: etsyTitle.trim(),
+      description: etsyDescription.trim(),
+      tags,
+      price: parsedPrice,
     };
-    console.log('[SIDEBAR ACTION] Uploading to Etsy with the following data:', etsyListingData);
-    alert('Check the developer console for the Etsy upload data object.');
+
+    console.log('[SIDEBAR ACTION] Uploading to Etsy with the following data:', payload);
+
+    try {
+      setUploadState('loading');
+      setStatusMessage('Submitting Etsy listing...');
+
+      const response = await fetch('/api/etsy/listings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const responseBody = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const detail = (responseBody as any)?.detail ?? 'Failed to upload listing to Etsy.';
+        throw new Error(detail);
+      }
+
+      const message = (responseBody as any)?.message ?? 'Etsy listing submitted successfully.';
+      setUploadState('success');
+      setStatusMessage(message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to upload listing to Etsy.';
+      setUploadState('error');
+      setStatusMessage(message);
+    }
   };
 
   return (
@@ -75,7 +126,7 @@ const EditingSidebar: React.FC<EditingSidebarProps> = ({ imagePath, onClose, isV
       {imagePath ? (
         <>
           <div className="selected-image-preview">
-            <img src={`http://localhost:8000${imagePath}`} alt="Selected for editing" />
+            <img src={`${apiBaseUrl}${imagePath}`} alt="Selected for editing" />
           </div>
 
           {/* Section 1: Image Processing Tools */}
@@ -106,7 +157,18 @@ const EditingSidebar: React.FC<EditingSidebarProps> = ({ imagePath, onClose, isV
               <label htmlFor="etsyPrice">Price ($)</label>
               <input id="etsyPrice" type="number" step="0.01" min="0" value={etsyPrice} onChange={(e) => setEtsyPrice(e.target.value)} placeholder="9.99"/>
             </div>
-            <button onClick={handleUploadToEtsy} style={{width: '100%', marginTop: '1rem'}}>Upload to Etsy</button>
+            <button
+              onClick={handleUploadToEtsy}
+              style={{ width: '100%', marginTop: '1rem' }}
+              disabled={uploadState === 'loading'}
+            >
+              {uploadState === 'loading' ? 'Uploading…' : 'Upload to Etsy'}
+            </button>
+            {statusMessage && (
+              <p className={`sidebar-status sidebar-status--${uploadState}`}>
+                {statusMessage}
+              </p>
+            )}
           </div>
         </>
       ) : (

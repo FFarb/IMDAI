@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +15,7 @@ load_dotenv()
 
 API_KEY_STORE = {"api_key": os.getenv("OPENAI_API_KEY")}
 PRESETS_FILE = "../presets.json" # Path to presets file in the root folder
+ETSY_LISTINGS_FILE = os.path.join("data", "etsy_listings.json")
 
 app = FastAPI()
 client = None
@@ -82,11 +83,43 @@ class ImageWithPrompt(BaseModel):
     prompt: Optional[PromptDTO] = None
 
 
+class EtsyListingRequest(BaseModel):
+    image_path: str
+    title: str
+    description: str = ""
+    tags: List[str] = Field(default_factory=list)
+    price: float = Field(..., gt=0)
+
+
 # --- Helper Functions ---
 def create_directories():
     os.makedirs("data/outputs", exist_ok=True)
 
 create_directories()
+
+
+def _load_existing_etsy_requests() -> List[Dict[str, Any]]:
+    if not os.path.exists(ETSY_LISTINGS_FILE):
+        return []
+
+    try:
+        with open(ETSY_LISTINGS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+    except json.JSONDecodeError:
+        logging.error("Existing Etsy listings file is not valid JSON. It will be reset.")
+
+    return []
+
+
+def _persist_etsy_request(record: Dict[str, Any]) -> None:
+    os.makedirs(os.path.dirname(ETSY_LISTINGS_FILE), exist_ok=True)
+    listings = _load_existing_etsy_requests()
+    listings.append(record)
+
+    with open(ETSY_LISTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(listings, f, indent=2)
 
 MASTER_PROMPT_TEMPLATE = """
 You are an expert image prompt generator. Your task is to take a set of input 'slots' and combine them into a coherent, high-quality positive and negative prompt for an AI image generator. The user wants a style-aware prompt.
@@ -255,6 +288,46 @@ async def save_preset(req: PresetSaveRequest):
     except Exception as e:
         logging.error(f"Failed to save preset: {e}")
         raise HTTPException(status_code=500, detail="Failed to save preset.")
+
+
+@app.post("/api/etsy/listings")
+async def create_etsy_listing(listing: EtsyListingRequest):
+    if not listing.title.strip():
+        raise HTTPException(status_code=400, detail="Title is required for Etsy listings.")
+
+    image_filename = os.path.basename(listing.image_path)
+    if not image_filename:
+        raise HTTPException(status_code=400, detail="Image path is invalid.")
+
+    image_filepath = os.path.join("data", "outputs", image_filename)
+    if not os.path.exists(image_filepath):
+        raise HTTPException(status_code=400, detail="Image not found on server. Please generate it before uploading.")
+
+    normalized_tags = [tag for tag in (t.strip() for t in listing.tags) if tag]
+
+    record = {
+        "image_path": listing.image_path,
+        "title": listing.title.strip(),
+        "description": listing.description.strip(),
+        "tags": normalized_tags,
+        "price": round(listing.price, 2),
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+    try:
+        _persist_etsy_request(record)
+    except Exception as exc:
+        logging.error(f"Failed to persist Etsy listing request: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to store Etsy listing request.")
+
+    logging.info(
+        "Received Etsy listing for '%s' with %d tags and price %.2f",
+        record["title"],
+        len(normalized_tags),
+        record["price"],
+    )
+
+    return {"message": "Etsy upload request stored successfully.", "listing": record}
 
 
 from fastapi.staticfiles import StaticFiles

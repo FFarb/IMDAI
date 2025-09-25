@@ -352,3 +352,21 @@ button:disabled { background-color: #444; cursor: not-allowed; }
     resize: vertical;
     min-height: 80px;
 }
+
+.sidebar-status {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.sidebar-status--success {
+  color: #7bd88f;
+}
+
+.sidebar-status--error {
+  color: #ffb4a9;
+}
+
+.sidebar-status--loading,
+.sidebar-status--idle {
+  color: #f6d860;
+}

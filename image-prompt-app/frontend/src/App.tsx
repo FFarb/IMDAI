@@ -252,6 +252,7 @@ function App() {
         isVisible={isSidebarVisible}
         imagePath={selectedImage}
         onClose={handleCloseSidebar}
+        apiBaseUrl={API_BASE_URL}
       />
     </div>
   );
