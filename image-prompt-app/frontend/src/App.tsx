@@ -153,6 +153,7 @@ function App() {
   const isSidebarVisible = selectedImage !== null;
   console.log('[App] rendering with selectedImage:', selectedImage);
   console.log('[App] isSidebarVisible:', isSidebarVisible);
+  console.log('[App] about to render EditingSidebar. isVisible:', isSidebarVisible);
 
   return (
     <div className="app-container">
@@ -247,7 +248,6 @@ function App() {
           ))}
         </div>
       </main>
-      {console.log('[App] about to render EditingSidebar. isVisible:', isSidebarVisible)}
       <EditingSidebar
         isVisible={isSidebarVisible}
         imagePath={selectedImage}
