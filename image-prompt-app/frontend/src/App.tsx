@@ -3,11 +3,12 @@ import axios from 'axios';
 import SettingsModal from './components/SettingsModal';
 import ColorPicker from './components/ColorPicker';
 import GalleryItem from './components/GalleryItem';
-import ProcessingSidebar from './components/ProcessingSidebar';
+import EtsySidebar, { EtsyListingFormValues } from './components/EtsySidebar';
 
 // --- Data Types ---
 interface Slots {
   subject: string;
+  text: string;
   style: string;
   composition: string;
   lighting: string;
@@ -15,6 +16,24 @@ interface Slots {
   details: string;
   quality: string;
 }
+
+const DEFAULT_SLOTS: Slots = {
+  subject: '',
+  text: '',
+  style: '',
+  composition: '',
+  lighting: '',
+  mood: '',
+  details: '',
+  quality: 'masterpiece, high detail, 8k',
+};
+
+const SLOT_CATEGORIES: { title: string; fields: (keyof Slots)[] }[] = [
+  { title: 'Text', fields: ['text'] },
+  { title: 'Subject & Composition', fields: ['subject', 'composition'] },
+  { title: 'Style & Mood', fields: ['style', 'lighting', 'mood'] },
+  { title: 'Details & Quality', fields: ['details', 'quality'] },
+];
 
 interface PromptDTO {
   positive: string;
@@ -35,10 +54,7 @@ type ApiStyle = 'vivid' | 'natural';
 const API_BASE_URL = 'http://localhost:8000';
 
 function App() {
-  const [slots, setSlots] = useState<Slots>({
-    subject: '', style: '', composition: '', lighting: '',
-    mood: '', details: '', quality: 'masterpiece, high detail, 8k'
-  });
+  const [slots, setSlots] = useState<Slots>({ ...DEFAULT_SLOTS });
   const [assembledPrompt, setAssembledPrompt] = useState<PromptDTO | null>(null);
   const [galleryImages, setGalleryImages] = useState<ImageWithPrompt[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -46,6 +62,7 @@ function App() {
   const [presets, setPresets] = useState<Record<string, Slots>>({});
   const [showSettings, setShowSettings] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
+  const [imageToProcess, setImageToProcess] = useState<string | null>(null);
 
   // --- User-Controlled API Parameters ---
   const [numImages, setNumImages] = useState(1);
@@ -71,8 +88,11 @@ function App() {
     try {
       const response = await fetch(`/presets.json?t=${new Date().getTime()}`);
       if (!response.ok) throw new Error("Network response was not ok");
-      const data = await response.json();
-      setPresets(data);
+      const data: Record<string, Partial<Slots>> = await response.json();
+      const normalized: Record<string, Slots> = Object.fromEntries(
+        Object.entries(data).map(([name, slotValues]) => [name, { ...DEFAULT_SLOTS, ...slotValues }])
+      );
+      setPresets(normalized);
     } catch (err) { console.error('Failed to load presets', err); }
   };
 
@@ -132,7 +152,29 @@ function App() {
   };
 
   const loadPreset = (presetName: string) => {
-    if (presets[presetName]) { setSlots(presets[presetName]); }
+    if (presets[presetName]) { setSlots({ ...DEFAULT_SLOTS, ...presets[presetName] }); }
+  };
+
+  const handleSelectImageForProcessing = (path: string) => {
+    setImageToProcess(path);
+  };
+
+  const handleCreateEtsyListing = async (values: EtsyListingFormValues) => {
+    if (!imageToProcess) {
+      throw new Error('No image selected for Etsy listing.');
+    }
+
+    const payload = {
+      image_path: imageToProcess,
+      title: values.title,
+      description: values.description,
+      price: values.price,
+      quantity: values.quantity,
+      taxonomy_id: values.taxonomyId,
+    };
+
+    const response = await axios.post('/api/etsy/create_listing', payload);
+    return response.data;
   };
 
   return (
@@ -160,11 +202,22 @@ function App() {
             </div>
         </div>
 
-        {Object.keys(slots).map((key) => (
-          <div className="form-group" key={key}>
-            <label htmlFor={key}>{key.charAt(0).toUpperCase() + key.slice(1)}</label>
-            <input type="text" id={key} name={key} value={slots[key as keyof Slots]} onChange={handleInputChange}/>
-          </div>
+        {SLOT_CATEGORIES.map((category) => (
+          <section key={category.title} className="slot-category">
+            <h3>{category.title}</h3>
+            {category.fields.map((key) => (
+              <div className="form-group" key={key}>
+                <label htmlFor={key}>{key.charAt(0).toUpperCase() + key.slice(1)}</label>
+                <input
+                  type="text"
+                  id={key}
+                  name={key}
+                  value={slots[key]}
+                  onChange={handleInputChange}
+                />
+              </div>
+            ))}
+          </section>
         ))}
 
         <ColorPicker />
@@ -217,12 +270,25 @@ function App() {
       <main className="gallery">
         <h2>Gallery</h2>
         <div className="gallery-grid">
-          {galleryImages.map((item) => (<GalleryItem key={item.image_path} imagePath={item.image_path} prompt={item.prompt} apiBaseUrl={API_BASE_URL} />))}
+          {galleryImages.map((item) => (
+            <GalleryItem
+              key={item.image_path}
+              imagePath={item.image_path}
+              prompt={item.prompt}
+              apiBaseUrl={API_BASE_URL}
+              onSelectForEtsy={handleSelectImageForProcessing}
+            />
+          ))}
         </div>
       </main>
 
-      {/* --- Right-hand Processing Sidebar --- */}
-      <ProcessingSidebar />
+      {/* --- Right-hand Etsy Sidebar --- */}
+      <EtsySidebar
+        imageToProcess={imageToProcess}
+        apiBaseUrl={API_BASE_URL}
+        onCreateListing={handleCreateEtsyListing}
+        onClearSelection={() => setImageToProcess(null)}
+      />
     </div>
   );
 }

@@ -39,6 +39,16 @@ body {
   flex-direction: column;
 }
 
+.slot-category {
+  margin-bottom: 1.5rem;
+}
+
+.slot-category h3 {
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+  color: #fff;
+}
+
 label {
   margin-bottom: 0.25rem;
   font-size: 0.9rem;

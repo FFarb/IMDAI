@@ -8,12 +8,28 @@ interface SettingsModalProps {
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onApiKeyUpdate }) => {
   const [apiKey, setApiKey] = useState('');
+  const [etsyApiKey, setEtsyApiKey] = useState('');
   const [message, setMessage] = useState('');
 
   const handleSave = async () => {
     try {
-      await axios.post('/api/settings/key', { api_key: apiKey });
-      setMessage('API Key saved successfully!');
+      const requests: Promise<unknown>[] = [];
+
+      if (apiKey.trim()) {
+        requests.push(axios.post('/api/settings/key', { api_key: apiKey.trim() }));
+      }
+
+      if (etsyApiKey.trim()) {
+        requests.push(axios.post('/api/settings/etsy_key', { api_key: etsyApiKey.trim() }));
+      }
+
+      if (requests.length === 0) {
+        setMessage('Enter a key before saving.');
+        return;
+      }
+
+      await Promise.all(requests);
+      setMessage('Settings saved successfully!');
       onApiKeyUpdate();
       setTimeout(() => {
         onClose();
@@ -36,6 +52,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onApiKeyUpdate }
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="sk-..."
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="etsy-api-key">Etsy API Key</label>
+          <input
+            id="etsy-api-key"
+            type="password"
+            value={etsyApiKey}
+            onChange={(e) => setEtsyApiKey(e.target.value)}
+            placeholder="etsy-..."
           />
         </div>
         {/* Placeholder for model names */}

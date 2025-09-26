@@ -7,13 +7,17 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
+import httpx
 import openai
 
 # --- Configuration & Initialization ---
 logging.basicConfig(level=logging.INFO)
 load_dotenv()
 
-API_KEY_STORE = {"api_key": os.getenv("OPENAI_API_KEY")}
+API_KEY_STORE = {
+    "api_key": os.getenv("OPENAI_API_KEY"),
+    "etsy_api_key": os.getenv("ETSY_API_KEY"),
+}
 PRESETS_FILE = "../presets.json" # Path to presets file in the root folder
 
 app = FastAPI()
@@ -54,6 +58,7 @@ DEFAULT_PARAMS = {
 
 class Slots(BaseModel):
     subject: str = ""
+    text: str = ""
     style: str = ""
     composition: str = ""
     lighting: str = ""
@@ -82,30 +87,64 @@ class ImageWithPrompt(BaseModel):
     prompt: Optional[PromptDTO] = None
 
 
+class EtsyListingRequest(BaseModel):
+    image_path: str
+    title: str
+    description: str
+    price: float
+    quantity: int
+    taxonomy_id: int
+
+
 # --- Helper Functions ---
 def create_directories():
     os.makedirs("data/outputs", exist_ok=True)
 
 create_directories()
 
-MASTER_PROMPT_TEMPLATE = """
-You are an expert image prompt generator. Your task is to take a set of input 'slots' and combine them into a coherent, high-quality positive and negative prompt for an AI image generator. The user wants a style-aware prompt.
 
-Return ONLY a valid JSON object with three keys: "positive", "negative", and "params".
-- "positive": A detailed, comma-separated string for the main image prompt. Integrate the user's 'Quality' input (e.g., '4k, best quality') directly into this positive prompt string.
-- "negative": A detailed, comma-separated string for things to avoid.
-- "params": A JSON object for technical settings. This object should ONLY contain keys for 'size' and 'style' if specified. Do NOT include a 'quality' key in this params object.
+def resolve_output_image_path(image_path: str) -> str:
+    if not image_path:
+        return ""
 
-Do not include any other text, explanations, or markdown.
+    if os.path.isabs(image_path):
+        return image_path
+
+    normalized = image_path.lstrip("/")
+    if normalized.startswith("images/"):
+        normalized = normalized[len("images/") :]
+
+    candidate = os.path.join("data", "outputs", normalized)
+    if os.path.isfile(candidate):
+        return candidate
+
+    fallback = os.path.join("data", "outputs", os.path.basename(normalized))
+    return fallback
+
+MASTER_PROMPT_TEMPLATE_PRINT = """
+You are an expert prompt generator for print artwork. Your task is to combine the input 'slots' into a single, coherent prompt string that describes a **print-ready image** exactly like the provided SVG references: bold vector lettering style, no background, clean edges, standalone composition.
 
 Here are the input slots:
 - Subject: {subject}
+- Text: {text}
 - Style: {style}
 - Composition: {composition}
 - Lighting: {lighting}
 - Mood: {mood}
 - Details: {details}
 - Quality: {quality}
+
+Always ensure the prompt includes the following explicit constraints:
+- **It is a print** (sticker, shirt, or poster).
+- **The exact text must be included**: render the word(s) from the {text} slot as bold vector letters in the described style.
+- **No background**: transparent background only, no scenery, no gradients, no shadows, no posterization, no textures simulating a background.
+- **Bold vector lettering style**: flat fills, solid colors, thick outline strokes, smooth clean edges, limited simple color palette.
+- Composition must be standalone, centered, isolated, ready for print.
+- Lighting must be flat/solid fills (no 3D shading).
+- Details should highlight: HEX color palette, stroke thickness, uniform vector outlines, typography style (blocky, cartoon, handwritten, graffiti, minimal, etc.).
+- Reinforce: "print-ready, transparent background, flat vector style, clean bold outline, solid fills, high resolution, no gradients, no shadows, no bevels, no photographic textures."
+
+The final output must be **only the prompt string**, merging all slots into a continuous description. Never add JSON or explanations.
 """
 
 # --- API Endpoints ---
@@ -118,12 +157,20 @@ async def set_api_key(key: ApiKey):
     return {"message": "API key updated successfully."}
 
 
+@app.post("/api/settings/etsy_key")
+async def set_etsy_api_key(key: ApiKey):
+    if not key.api_key:
+        raise HTTPException(status_code=400, detail="API key cannot be empty.")
+    API_KEY_STORE["etsy_api_key"] = key.api_key
+    return {"message": "Etsy API key updated successfully."}
+
+
 @app.post("/api/assemble", response_model=PromptDTO)
 async def assemble_prompt(slots: Slots):
     if not client:
         raise HTTPException(status_code=400, detail="OpenAI client not initialized. Please set API key.")
 
-    content = MASTER_PROMPT_TEMPLATE.format(**slots.dict())
+    content = MASTER_PROMPT_TEMPLATE_PRINT.format(**slots.dict())
 
     for attempt in range(2):
         try:
@@ -179,7 +226,6 @@ async def generate_image(req: ImageRequest):
         )
 
         saved_files = []
-        import httpx
         async with httpx.AsyncClient() as http_client:
             for i, image_data in enumerate(response.data):
                 image_url = image_data.url
@@ -255,6 +301,110 @@ async def save_preset(req: PresetSaveRequest):
     except Exception as e:
         logging.error(f"Failed to save preset: {e}")
         raise HTTPException(status_code=500, detail="Failed to save preset.")
+
+
+@app.post("/api/etsy/create_listing")
+async def create_etsy_listing(listing: EtsyListingRequest):
+    etsy_api_key = API_KEY_STORE.get("etsy_api_key")
+    if not etsy_api_key:
+        raise HTTPException(status_code=400, detail="Etsy API key not configured.")
+
+    image_file_path = resolve_output_image_path(listing.image_path)
+    if not image_file_path or not os.path.isfile(image_file_path):
+        raise HTTPException(status_code=404, detail="Image file not found.")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as http_client:
+            with open(image_file_path, "rb") as image_file:
+                image_bytes = image_file.read()
+
+            files = {
+                "file": (
+                    os.path.basename(image_file_path),
+                    image_bytes,
+                    "image/png",
+                )
+            }
+
+            upload_response = await http_client.post(
+                "https://openapi.etsy.com/v3/application/uploads/images",
+                headers={"x-api-key": etsy_api_key},
+                files=files,
+            )
+
+            if upload_response.status_code >= 400:
+                logging.error(
+                    "Etsy upload failed: %s", upload_response.text
+                )
+                raise HTTPException(
+                    status_code=upload_response.status_code,
+                    detail="Failed to upload image to Etsy.",
+                )
+
+            upload_data = upload_response.json()
+            listing_image_id = (
+                upload_data.get("listing_image_id")
+                or upload_data.get("image_id")
+                or upload_data.get("upload_id")
+            )
+
+            if not listing_image_id:
+                logging.error("Unexpected Etsy upload response: %s", upload_data)
+                raise HTTPException(
+                    status_code=500,
+                    detail="Etsy upload response missing listing image id.",
+                )
+
+            listing_payload = {
+                "title": listing.title,
+                "description": listing.description,
+                "who_made": "i_did",
+                "when_made": "made_to_order",
+                "is_digital": True,
+                "type": "download",
+                "taxonomy_id": listing.taxonomy_id,
+                "price": listing.price,
+                "quantity": listing.quantity,
+                "listing_image_id": listing_image_id,
+            }
+
+            create_response = await http_client.post(
+                "https://openapi.etsy.com/v3/application/listings",
+                headers={
+                    "x-api-key": etsy_api_key,
+                    "Content-Type": "application/json",
+                },
+                json=listing_payload,
+            )
+
+            if create_response.status_code >= 400:
+                logging.error(
+                    "Etsy listing creation failed: %s", create_response.text
+                )
+                raise HTTPException(
+                    status_code=create_response.status_code,
+                    detail="Failed to create Etsy listing.",
+                )
+
+            listing_data = create_response.json()
+            listing_id = listing_data.get("listing_id") or listing_data.get(
+                "data", {}
+            ).get("listing_id")
+
+            listing_url = (
+                f"https://www.etsy.com/listing/{listing_id}" if listing_id else None
+            )
+
+            return {
+                "message": "Listing created successfully.",
+                "listing_id": listing_id,
+                "listing_url": listing_url,
+            }
+    except httpx.HTTPError as exc:
+        logging.error("Etsy API communication error: %s", exc)
+        raise HTTPException(
+            status_code=502, detail="Failed to communicate with Etsy API."
+        )
 
 
 from fastapi.staticfiles import StaticFiles

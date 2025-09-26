@@ -10,9 +10,10 @@ interface GalleryItemProps {
   imagePath: string;
   prompt: PromptDTO | null;
   apiBaseUrl: string;
+  onSelectForEtsy: (imagePath: string) => void;
 }
 
-const GalleryItem: React.FC<GalleryItemProps> = ({ imagePath, prompt, apiBaseUrl }) => {
+const GalleryItem: React.FC<GalleryItemProps> = ({ imagePath, prompt, apiBaseUrl, onSelectForEtsy }) => {
   const [showPrompt, setShowPrompt] = useState(false);
 
   const handleDownload = async () => {
@@ -44,6 +45,9 @@ const GalleryItem: React.FC<GalleryItemProps> = ({ imagePath, prompt, apiBaseUrl
         </button>
         <button className="gallery-item-btn" onClick={handleDownload}>
           Download
+        </button>
+        <button className="gallery-item-btn" onClick={() => onSelectForEtsy(imagePath)}>
+          List on Etsy
         </button>
       </div>
       {showPrompt && prompt && (
