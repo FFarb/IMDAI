@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 import openai
 
+from discovery.router import router as discovery_router
+
 # --- Configuration & Initialization ---
 logging.basicConfig(level=logging.INFO)
 load_dotenv()
@@ -33,6 +35,8 @@ def initialize_openai_client():
         logging.warning("OpenAI client not initialized. API key is missing.")
 
 initialize_openai_client()
+
+app.include_router(discovery_router, prefix="/api/discover")
 
 # --- CORS Middleware ---
 app.add_middleware(
