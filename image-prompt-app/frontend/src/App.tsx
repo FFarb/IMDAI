@@ -8,6 +8,7 @@ import ReferenceSearchBar from './components/reference/ReferenceSearchBar';
 import ReferenceResultsGrid from './components/reference/ReferenceResultsGrid';
 import ReferenceSelectedList from './components/reference/ReferenceSelectedList';
 import ReferenceStatusBar from './components/reference/ReferenceStatusBar';
+import AutofillPanel from './components/right/AutofillPanel';
 import TraitsPreview from './components/traits/TraitsPreview';
 import MasterPromptCard from './components/traits/MasterPromptCard';
 import type {
@@ -19,6 +20,7 @@ import type {
   Reference,
   TraitWeights,
 } from './types/discovery';
+import type { ImageWithPrompt, PromptDTO } from './types/promptBuilder';
 import {
   analyzeReferences,
   searchDiscovery,
@@ -75,17 +77,6 @@ interface Slots {
   quality: string;
 }
 
-interface PromptDTO {
-  positive: string;
-  negative: string;
-  params: Record<string, any>;
-}
-
-interface ImageWithPrompt {
-  image_path: string;
-  prompt: PromptDTO | null;
-}
-
 // --- API Parameter Types ---
 type ApiQuality = 'standard' | 'hd';
 type ApiSize = '1024x1024' | '1024x1792' | '1792x1024';
@@ -130,6 +121,7 @@ function App() {
   const [resultsFocusedId, setResultsFocusedId] = useState<string | null>(null);
   const [selectedFocusedId, setSelectedFocusedId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [rightSidebarTab, setRightSidebarTab] = useState<'traits' | 'autofill'>('traits');
   const [lastStatsUpdated, setLastStatsUpdated] = useState<Date | null>(null);
   const [featureMap, setFeatureMap] = useState<Record<string, FeatureDescriptor>>({});
   const [datasetTraits, setDatasetTraits] = useState<DatasetTraits | null>(null);
@@ -834,64 +826,86 @@ function App() {
       </main>
 
       <aside className="processing traits-sidebar">
-        <div className="traits-toolbar">
-          <h2>Traits &amp; Prompt</h2>
-          {traitsOutdated && selectedCount > 0 && (
-            <span className="banner warning">Traits outdated → Re-Analyze</span>
-          )}
+        <div className="right-tabs">
+          <button
+            type="button"
+            className={rightSidebarTab === 'traits' ? 'active' : ''}
+            onClick={() => setRightSidebarTab('traits')}
+          >
+            Traits &amp; Prompt
+          </button>
+          <button
+            type="button"
+            className={rightSidebarTab === 'autofill' ? 'active' : ''}
+            onClick={() => setRightSidebarTab('autofill')}
+          >
+            Autofill
+          </button>
         </div>
-        <button type="button" onClick={handleAnalyzeTraits} disabled={disableAnalyze} className="primary">
-          {analyzeButtonLabel}
-        </button>
-        {isAnalyzingTraits && <p className="hint">Extracting palette, lines, fill, typography…</p>}
-        {analyzeTotal !== null && !isAnalyzingTraits && (
-          <p className="hint">Analyzed {analyzeTotal} reference{analyzeTotal === 1 ? '' : 's'}</p>
+        {rightSidebarTab === 'traits' ? (
+          <>
+            <div className="traits-toolbar">
+              <h2>Traits &amp; Prompt</h2>
+              {traitsOutdated && selectedCount > 0 && (
+                <span className="banner warning">Traits outdated → Re-Analyze</span>
+              )}
+            </div>
+            <button type="button" onClick={handleAnalyzeTraits} disabled={disableAnalyze} className="primary">
+              {analyzeButtonLabel}
+            </button>
+            {isAnalyzingTraits && <p className="hint">Extracting palette, lines, fill, typography…</p>}
+            {analyzeTotal !== null && !isAnalyzingTraits && (
+              <p className="hint">Analyzed {analyzeTotal} reference{analyzeTotal === 1 ? '' : 's'}</p>
+            )}
+            <TraitsPreview traits={datasetTraits} loading={traitsLoading || isAnalyzingTraits} />
+            <section className="audience-section">
+              <h3>Audience Modes</h3>
+              <div className="audience-grid">
+                {AUDIENCE_OPTIONS.map((mode) => (
+                  <label key={mode} className="audience-option">
+                    <input
+                      type="checkbox"
+                      checked={audienceModes.includes(mode)}
+                      onChange={() => toggleAudienceMode(mode)}
+                    />
+                    {mode}
+                  </label>
+                ))}
+              </div>
+              <h3>Trait Weights</h3>
+              <div className="weights-grid">
+                {TRAIT_WEIGHT_LABELS.map(({ key, label }) => (
+                  <label key={key} className="weight-slider">
+                    <span>{label}</span>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={2}
+                      step={0.1}
+                      value={traitWeights[key]}
+                      onChange={(event) => handleTraitWeightChange(key, Number(event.target.value))}
+                    />
+                    <small>{traitWeights[key].toFixed(1)}×</small>
+                  </label>
+                ))}
+              </div>
+            </section>
+            {promptNeedsRefresh && masterPrompt && (
+              <div className="banner info">Prompt outdated → Re-Autofill</div>
+            )}
+            <button
+              type="button"
+              onClick={handleAutofillMasterPrompt}
+              disabled={!datasetTraits || isAutofillingPrompt}
+              className="primary"
+            >
+              {isAutofillingPrompt ? 'Autofilling…' : 'Autofill Master Prompt'}
+            </button>
+            <MasterPromptCard prompt={masterPrompt} />
+          </>
+        ) : (
+          <AutofillPanel onShowToast={setToastMessage} refreshGallery={fetchGalleryImages} />
         )}
-        <TraitsPreview traits={datasetTraits} loading={traitsLoading || isAnalyzingTraits} />
-        <section className="audience-section">
-          <h3>Audience Modes</h3>
-          <div className="audience-grid">
-            {AUDIENCE_OPTIONS.map((mode) => (
-              <label key={mode} className="audience-option">
-                <input
-                  type="checkbox"
-                  checked={audienceModes.includes(mode)}
-                  onChange={() => toggleAudienceMode(mode)}
-                />
-                {mode}
-              </label>
-            ))}
-          </div>
-          <h3>Trait Weights</h3>
-          <div className="weights-grid">
-            {TRAIT_WEIGHT_LABELS.map(({ key, label }) => (
-              <label key={key} className="weight-slider">
-                <span>{label}</span>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={2}
-                  step={0.1}
-                  value={traitWeights[key]}
-                  onChange={(event) => handleTraitWeightChange(key, Number(event.target.value))}
-                />
-                <small>{traitWeights[key].toFixed(1)}×</small>
-              </label>
-            ))}
-          </div>
-        </section>
-        {promptNeedsRefresh && masterPrompt && (
-          <div className="banner info">Prompt outdated → Re-Autofill</div>
-        )}
-        <button
-          type="button"
-          onClick={handleAutofillMasterPrompt}
-          disabled={!datasetTraits || isAutofillingPrompt}
-          className="primary"
-        >
-          {isAutofillingPrompt ? 'Autofilling…' : 'Autofill Master Prompt'}
-        </button>
-        <MasterPromptCard prompt={masterPrompt} />
       </aside>
 
       {toastMessage && <div className="toast">{toastMessage}</div>}

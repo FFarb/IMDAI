@@ -10,6 +10,7 @@ from typing import Dict, Any, List, Optional
 import openai
 
 from discovery.router import prompt_router as discovery_prompt_router, router as discovery_router
+from server.autofill.router import router as autofill_router
 
 # --- Configuration & Initialization ---
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +39,7 @@ initialize_openai_client()
 
 app.include_router(discovery_router, prefix="/api/discover")
 app.include_router(discovery_prompt_router)
+app.include_router(autofill_router, prefix="/api")
 
 # --- CORS Middleware ---
 app.add_middleware(

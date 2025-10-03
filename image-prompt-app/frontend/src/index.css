@@ -394,6 +394,250 @@ body {
   letter-spacing: 0.03em;
 }
 
+.right-tabs {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.right-tabs button {
+  flex: 1;
+  background: #242424;
+  border: 1px solid #363636;
+  color: #e7e7e7;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  transition: all 0.15s ease;
+}
+
+.right-tabs button:hover {
+  border-color: #4a4a4a;
+}
+
+.right-tabs button.active {
+  background: #333647;
+  border-color: #6270ff;
+  color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(98, 112, 255, 0.35);
+}
+
+.autofill-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.autofill-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.autofill-form label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #b5b5b5;
+}
+
+.autofill-form input,
+.autofill-form select,
+.master-prompt textarea {
+  background-color: #121212;
+  color: #f7f7f7;
+  border: 1px solid #363636;
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+.autofill-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+}
+
+.autofill-grid label {
+  margin: 0;
+}
+
+.autofill-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: #d5d5d5;
+}
+
+.autofill-flags input {
+  margin-right: 0.35rem;
+}
+
+.autofill-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.autofill-actions .primary {
+  flex-grow: 1;
+}
+
+.one-click-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #b5b5b5;
+}
+
+.one-click-controls input {
+  width: 4rem;
+  text-align: center;
+}
+
+.autofill-actions button {
+  min-width: 160px;
+}
+
+.autofill-skeleton {
+  background: #181818;
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.skeleton-line,
+.skeleton-block {
+  background: linear-gradient(90deg, rgba(48, 48, 48, 0.4), rgba(96, 96, 96, 0.7), rgba(48, 48, 48, 0.4));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+.skeleton-line {
+  height: 12px;
+}
+
+.skeleton-block {
+  height: 80px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+}
+
+.motif-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.motif-chip {
+  background: #262626;
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #f0f0f0;
+}
+
+.traits-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.traits-meta dt {
+  margin: 0 0 0.25rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9f9f9f;
+}
+
+.traits-meta dd {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #f2f2f2;
+}
+
+.master-prompt textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+
+.prompt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.prompt-header button {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.prompt-json {
+  background: #121212;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  max-height: 220px;
+  overflow: auto;
+  font-family: 'Fira Code', 'SFMono-Regular', 'Consolas', monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.sources ul {
+  list-style: disc;
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.sources a {
+  color: #8fb4ff;
+  text-decoration: none;
+}
+
+.sources a:hover {
+  text-decoration: underline;
+}
+
+.autofill-images ul {
+  margin: 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: #c7c7c7;
+}
+
 .audience-section {
   display: flex;
   flex-direction: column;
