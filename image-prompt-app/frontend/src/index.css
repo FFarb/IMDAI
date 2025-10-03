@@ -286,6 +286,210 @@ body {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
+.traits-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.traits-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.banner {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.banner.warning {
+  background-color: #5b2c2c;
+  color: #ffb1b1;
+}
+
+.banner.info {
+  background-color: #2a3a5f;
+  color: #aecdff;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: #b7b7b7;
+  margin: 0;
+}
+
+.traits-panel {
+  background-color: #1a1a1a;
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.traits-panel.empty {
+  color: #888;
+  text-align: center;
+}
+
+.traits-group h4 {
+  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+}
+
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 0.5rem;
+}
+
+.palette-chip {
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 0.5rem;
+  color: #111;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  position: relative;
+}
+
+.palette-chip span {
+  font-size: 0.8rem;
+}
+
+.palette-chip small {
+  font-size: 0.7rem;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.palette-chip em {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 0.65rem;
+  color: #111;
+}
+
+.motif-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.motif-pill {
+  background-color: #262626;
+  border-radius: 14px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  color: #ddd;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.audience-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.audience-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.audience-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background-color: #242424;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.weights-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.weight-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: #ccc;
+}
+
+.weight-slider small {
+  font-size: 0.75rem;
+  color: #9f9f9f;
+}
+
+.master-prompt-card {
+  background-color: #1a1a1a;
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.master-prompt-card .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.master-prompt-card textarea {
+  min-height: 140px;
+  resize: vertical;
+  font-family: monospace;
+  font-size: 0.85rem;
+  background-color: #141414;
+  border: 1px solid #333;
+  color: #fafafa;
+}
+
+.master-prompt-card details {
+  background-color: #111;
+  padding: 0.75rem;
+  border-radius: 8px;
+}
+
+.master-prompt-card summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #9ba6ff;
+}
+
+.master-prompt-card pre {
+  margin: 0.5rem 0 0;
+  max-height: 180px;
+  overflow-y: auto;
+  font-size: 0.8rem;
+}
+
+.primary {
+  background-color: #3b3bf4;
+  color: #fff;
+}
+
+.primary:disabled {
+  background-color: #333;
+  color: #777;
+}
+
 .form-group {
   display: flex;
   flex-direction: column;

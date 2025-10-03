@@ -1,22 +1,30 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { ChangeEvent } from 'react';
 import axios from 'axios';
 import SettingsModal from './components/SettingsModal';
 import ColorPicker from './components/ColorPicker';
 import GalleryItem from './components/GalleryItem';
-import ProcessingSidebar from './components/ProcessingSidebar';
 import ReferenceSearchBar from './components/reference/ReferenceSearchBar';
 import ReferenceResultsGrid from './components/reference/ReferenceResultsGrid';
 import ReferenceSelectedList from './components/reference/ReferenceSelectedList';
 import ReferenceStatusBar from './components/reference/ReferenceStatusBar';
+import TraitsPreview from './components/traits/TraitsPreview';
+import MasterPromptCard from './components/traits/MasterPromptCard';
 import type {
+  DatasetTraits,
   DiscoveryFilters,
   DiscoverStats,
+  FeatureDescriptor,
+  MasterPromptPayload,
   Reference,
+  TraitWeights,
 } from './types/discovery';
 import {
+  analyzeReferences,
   searchDiscovery,
   fetchReferences as fetchDiscoveryReferences,
+  fetchFeatures as fetchDiscoveryFeatures,
+  fetchTraits as fetchDiscoveryTraits,
   fetchStats as fetchDiscoveryStats,
   selectReference,
   hideReference as hideDiscoveryReference,
@@ -26,6 +34,7 @@ import {
   persistSessionId,
   loadPersistedSessionId,
 } from './api/discover';
+import { autofillMasterPrompt } from './api/prompt';
 
 // --- Discovery constants ---
 const DISCOVERY_PAGE_SIZE = 24;
@@ -37,6 +46,23 @@ const DEFAULT_FILTERS: DiscoveryFilters = {
   kidsSafe: true,
   hideBusy: true,
 };
+
+const DEFAULT_TRAIT_WEIGHTS: TraitWeights = {
+  palette: 1,
+  motifs: 1,
+  line: 1,
+  type: 1,
+  comp: 1,
+};
+
+const AUDIENCE_OPTIONS = ['Baby', 'Toddler', 'Baby-Mama', 'Luxury-Inspired'] as const;
+const TRAIT_WEIGHT_LABELS: Array<{ key: keyof TraitWeights; label: string }> = [
+  { key: 'palette', label: 'Palette' },
+  { key: 'motifs', label: 'Motifs' },
+  { key: 'line', label: 'Line' },
+  { key: 'type', label: 'Typography' },
+  { key: 'comp', label: 'Composition' },
+];
 
 // --- Prompt builder types ---
 interface Slots {
@@ -105,6 +131,18 @@ function App() {
   const [selectedFocusedId, setSelectedFocusedId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [lastStatsUpdated, setLastStatsUpdated] = useState<Date | null>(null);
+  const [featureMap, setFeatureMap] = useState<Record<string, FeatureDescriptor>>({});
+  const [datasetTraits, setDatasetTraits] = useState<DatasetTraits | null>(null);
+  const [isAnalyzingTraits, setIsAnalyzingTraits] = useState(false);
+  const [analyzeTotal, setAnalyzeTotal] = useState<number | null>(null);
+  const [traitsLoading, setTraitsLoading] = useState(false);
+  const [traitsOutdated, setTraitsOutdated] = useState(false);
+  const [audienceModes, setAudienceModes] = useState<string[]>([]);
+  const [traitWeights, setTraitWeights] = useState<TraitWeights>({ ...DEFAULT_TRAIT_WEIGHTS });
+  const [masterPrompt, setMasterPrompt] = useState<MasterPromptPayload | null>(null);
+  const [isAutofillingPrompt, setIsAutofillingPrompt] = useState(false);
+  const [promptNeedsRefresh, setPromptNeedsRefresh] = useState(false);
+  const hasGeneratedPromptRef = useRef(false);
 
   // --- Effects ---
   useEffect(() => {
@@ -124,6 +162,18 @@ function App() {
       setResultsOffset(0);
       setHasMoreResults(false);
       persistSessionId(null);
+      setFeatureMap({});
+      setDatasetTraits(null);
+      setTraitsOutdated(false);
+      setAnalyzeTotal(null);
+      setIsAnalyzingTraits(false);
+      setTraitsLoading(false);
+      setAudienceModes([]);
+      setTraitWeights({ ...DEFAULT_TRAIT_WEIGHTS });
+      setMasterPrompt(null);
+      setPromptNeedsRefresh(false);
+      setIsAutofillingPrompt(false);
+      hasGeneratedPromptRef.current = false;
       return;
     }
 
@@ -142,6 +192,23 @@ function App() {
         setDiscoveryStats(stats);
         setLastStatsUpdated(new Date());
         persistSessionId(discoverySessionId);
+        try {
+          const features = await fetchDiscoveryFeatures(discoverySessionId);
+          setFeatureMap(features);
+        } catch (error) {
+          setFeatureMap({});
+        }
+        try {
+          const traits = await fetchDiscoveryTraits(discoverySessionId);
+          setDatasetTraits(traits);
+          setTraitsOutdated(false);
+          if (traits.audience_modes.length > 0) {
+            setAudienceModes(traits.audience_modes);
+          }
+        } catch (error) {
+          setDatasetTraits(null);
+          setTraitsOutdated(selected.items.length > 0);
+        }
       } catch (err: any) {
         setDiscoveryError(err.message ?? 'Failed to load discovery session');
       } finally {
@@ -157,6 +224,11 @@ function App() {
     const id = window.setTimeout(() => setToastMessage(null), 3000);
     return () => window.clearTimeout(id);
   }, [toastMessage]);
+
+  useEffect(() => {
+    if (!hasGeneratedPromptRef.current) return;
+    setPromptNeedsRefresh(true);
+  }, [audienceModes, traitWeights.palette, traitWeights.motifs, traitWeights.line, traitWeights.type, traitWeights.comp]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -305,6 +377,92 @@ function App() {
     }
   }, [discoverySessionId]);
 
+  const handleAnalyzeTraits = async () => {
+    if (!discoverySessionId) return;
+    if (selectedReferences.length === 0) {
+      setToastMessage('Select references before running analysis');
+      return;
+    }
+    setIsAnalyzingTraits(true);
+    setAnalyzeTotal(null);
+    setDiscoveryError(null);
+    try {
+      const response = await analyzeReferences(discoverySessionId, 'selected');
+      setAnalyzeTotal(response.total);
+      try {
+        const features = await fetchDiscoveryFeatures(discoverySessionId);
+        setFeatureMap(features);
+      } catch (error) {
+        setFeatureMap({});
+      }
+      setTraitsLoading(true);
+      let traitsFetched = false;
+      try {
+        const traits = await fetchDiscoveryTraits(discoverySessionId);
+        setDatasetTraits(traits);
+        setTraitsOutdated(false);
+        if (traits.audience_modes.length > 0) {
+          setAudienceModes(traits.audience_modes);
+        }
+        if (masterPrompt) {
+          setPromptNeedsRefresh(true);
+        }
+        traitsFetched = true;
+      } catch (err: any) {
+        setDatasetTraits(null);
+        setTraitsOutdated(selectedReferences.length > 0);
+        setDiscoveryError(err.message ?? 'Failed to aggregate traits');
+      } finally {
+        setTraitsLoading(false);
+      }
+      if (traitsFetched) {
+        setToastMessage('Traits updated');
+      }
+    } catch (err: any) {
+      setDiscoveryError(err.message ?? 'Failed to analyze references');
+    } finally {
+      setIsAnalyzingTraits(false);
+    }
+  };
+
+  const toggleAudienceMode = (mode: string) => {
+    setAudienceModes((prev) => {
+      if (prev.includes(mode)) {
+        return prev.filter((item) => item !== mode);
+      }
+      return [...prev, mode];
+    });
+  };
+
+  const handleTraitWeightChange = (key: keyof TraitWeights, value: number) => {
+    setTraitWeights((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleAutofillMasterPrompt = async () => {
+    if (!discoverySessionId) return;
+    if (!datasetTraits) {
+      setToastMessage('Analyze traits first to enable autofill');
+      return;
+    }
+    setIsAutofillingPrompt(true);
+    setDiscoveryError(null);
+    try {
+      const payload = await autofillMasterPrompt({
+        sessionId: discoverySessionId,
+        audienceModes,
+        traitWeights,
+      });
+      setMasterPrompt(payload);
+      setPromptNeedsRefresh(false);
+      hasGeneratedPromptRef.current = true;
+      setToastMessage('Master prompt ready');
+    } catch (err: any) {
+      setDiscoveryError(err.message ?? 'Failed to autofill master prompt');
+    } finally {
+      setIsAutofillingPrompt(false);
+    }
+  };
+
   const handleDiscoverySearch = useCallback(async () => {
     if (!discoveryQuery.trim()) return;
     setIsDiscovering(true);
@@ -361,6 +519,11 @@ function App() {
       setResultsFocusedId(null);
       setSelectedFocusedId(reference.id);
       await refreshStats();
+      setTraitsOutdated(true);
+      setAnalyzeTotal(null);
+      if (masterPrompt) {
+        setPromptNeedsRefresh(true);
+      }
     } catch (err: any) {
       setDiscoveryError(err.message ?? 'Failed to select reference');
     }
@@ -374,6 +537,11 @@ function App() {
       setResultReferences((prev) => prev.filter((item) => item.id !== reference.id));
       setSelectedReferences((prev) => prev.filter((item) => item.id !== reference.id));
       await refreshStats();
+      setTraitsOutdated(true);
+      setAnalyzeTotal(null);
+      if (masterPrompt) {
+        setPromptNeedsRefresh(true);
+      }
     } catch (err: any) {
       setDiscoveryError(err.message ?? 'Failed to hide reference');
     }
@@ -387,6 +555,11 @@ function App() {
       setResultReferences((prev) => prev.filter((item) => item.id !== reference.id));
       setSelectedReferences((prev) => prev.filter((item) => item.id !== reference.id));
       await refreshStats();
+      setTraitsOutdated(true);
+      setAnalyzeTotal(null);
+      if (masterPrompt) {
+        setPromptNeedsRefresh(true);
+      }
     } catch (err: any) {
       setDiscoveryError(err.message ?? 'Failed to delete reference');
     }
@@ -403,6 +576,13 @@ function App() {
       setSelectedReferences((prev) =>
         prev.map((item) => (item.id === reference.id ? { ...item, weight: nextWeight } : item)),
       );
+      if (selectedReferences.some((item) => item.id === reference.id)) {
+        setTraitsOutdated(true);
+        setAnalyzeTotal(null);
+        if (masterPrompt) {
+          setPromptNeedsRefresh(true);
+        }
+      }
     } catch (err: any) {
       setDiscoveryError(err.message ?? 'Failed to star reference');
     }
@@ -416,6 +596,11 @@ function App() {
       const swapWith = direction === 'up' ? index - 1 : index + 1;
       if (swapWith < 0 || swapWith >= next.length) return prev;
       [next[index], next[swapWith]] = [next[swapWith], next[index]];
+      setTraitsOutdated(true);
+      setAnalyzeTotal(null);
+      if (masterPrompt) {
+        setPromptNeedsRefresh(true);
+      }
       return next;
     });
   };
@@ -444,9 +629,11 @@ function App() {
   };
 
   const handleCopyPalette = async (reference: Reference) => {
+    const feature = featureMap[reference.id];
+    const payload = feature ? feature.palette.map((entry) => entry.hex).join(', ') : reference.url;
     try {
-      await navigator.clipboard.writeText(reference.url);
-      setToastMessage('Reference link copied to clipboard');
+      await navigator.clipboard.writeText(payload);
+      setToastMessage(feature ? 'Palette copied to clipboard' : 'Reference link copied to clipboard');
     } catch (err) {
       setToastMessage('Clipboard copy failed');
     }
@@ -463,6 +650,8 @@ function App() {
 
   // --- Derived values ---
   const selectedCount = selectedReferences.length;
+  const disableAnalyze = isAnalyzingTraits || selectedCount === 0 || !discoverySessionId;
+  const analyzeButtonLabel = isAnalyzingTraits ? 'Analyzing…' : 'Analyze Selected';
 
   return (
     <div className="app-container">
@@ -644,8 +833,65 @@ function App() {
         </div>
       </main>
 
-      <aside className="processing">
-        <ProcessingSidebar />
+      <aside className="processing traits-sidebar">
+        <div className="traits-toolbar">
+          <h2>Traits &amp; Prompt</h2>
+          {traitsOutdated && selectedCount > 0 && (
+            <span className="banner warning">Traits outdated → Re-Analyze</span>
+          )}
+        </div>
+        <button type="button" onClick={handleAnalyzeTraits} disabled={disableAnalyze} className="primary">
+          {analyzeButtonLabel}
+        </button>
+        {isAnalyzingTraits && <p className="hint">Extracting palette, lines, fill, typography…</p>}
+        {analyzeTotal !== null && !isAnalyzingTraits && (
+          <p className="hint">Analyzed {analyzeTotal} reference{analyzeTotal === 1 ? '' : 's'}</p>
+        )}
+        <TraitsPreview traits={datasetTraits} loading={traitsLoading || isAnalyzingTraits} />
+        <section className="audience-section">
+          <h3>Audience Modes</h3>
+          <div className="audience-grid">
+            {AUDIENCE_OPTIONS.map((mode) => (
+              <label key={mode} className="audience-option">
+                <input
+                  type="checkbox"
+                  checked={audienceModes.includes(mode)}
+                  onChange={() => toggleAudienceMode(mode)}
+                />
+                {mode}
+              </label>
+            ))}
+          </div>
+          <h3>Trait Weights</h3>
+          <div className="weights-grid">
+            {TRAIT_WEIGHT_LABELS.map(({ key, label }) => (
+              <label key={key} className="weight-slider">
+                <span>{label}</span>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={2}
+                  step={0.1}
+                  value={traitWeights[key]}
+                  onChange={(event) => handleTraitWeightChange(key, Number(event.target.value))}
+                />
+                <small>{traitWeights[key].toFixed(1)}×</small>
+              </label>
+            ))}
+          </div>
+        </section>
+        {promptNeedsRefresh && masterPrompt && (
+          <div className="banner info">Prompt outdated → Re-Autofill</div>
+        )}
+        <button
+          type="button"
+          onClick={handleAutofillMasterPrompt}
+          disabled={!datasetTraits || isAutofillingPrompt}
+          className="primary"
+        >
+          {isAutofillingPrompt ? 'Autofilling…' : 'Autofill Master Prompt'}
+        </button>
+        <MasterPromptCard prompt={masterPrompt} />
       </aside>
 
       {toastMessage && <div className="toast">{toastMessage}</div>}

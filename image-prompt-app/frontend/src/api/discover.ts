@@ -1,7 +1,10 @@
 import type {
+  AnalyzeResponse,
+  DatasetTraits,
   DiscoverySearchPayload,
-  ReferenceListResponse,
   DiscoverStats,
+  FeatureDescriptor,
+  ReferenceListResponse,
 } from '../types/discovery';
 
 const API_PREFIX = '/api/discover';
@@ -91,6 +94,28 @@ export async function fetchStats(sessionId: string): Promise<DiscoverStats> {
   const response = await fetch(`${API_PREFIX}/${sessionId}/stats`);
   const data = await handleResponse<{ stats: DiscoverStats }>(response);
   return data.stats;
+}
+
+export async function analyzeReferences(
+  sessionId: string,
+  scope: 'selected' | 'all' = 'selected',
+): Promise<AnalyzeResponse> {
+  const response = await fetch(`${API_PREFIX}/${sessionId}/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scope }),
+  });
+  return handleResponse<AnalyzeResponse>(response);
+}
+
+export async function fetchFeatures(sessionId: string): Promise<Record<string, FeatureDescriptor>> {
+  const response = await fetch(`${API_PREFIX}/${sessionId}/features`);
+  return handleResponse<Record<string, FeatureDescriptor>>(response);
+}
+
+export async function fetchTraits(sessionId: string): Promise<DatasetTraits> {
+  const response = await fetch(`${API_PREFIX}/${sessionId}/traits`);
+  return handleResponse<DatasetTraits>(response);
 }
 
 export async function uploadLocalReferences(

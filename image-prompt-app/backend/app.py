@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 import openai
 
-from discovery.router import router as discovery_router
+from discovery.router import prompt_router as discovery_prompt_router, router as discovery_router
 
 # --- Configuration & Initialization ---
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +37,7 @@ def initialize_openai_client():
 initialize_openai_client()
 
 app.include_router(discovery_router, prefix="/api/discover")
+app.include_router(discovery_prompt_router)
 
 # --- CORS Middleware ---
 app.add_middleware(

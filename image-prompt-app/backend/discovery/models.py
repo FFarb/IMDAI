@@ -72,6 +72,55 @@ class ReferenceList(BaseModel):
     total: int
 
 
+class PaletteColor(BaseModel):
+    """Represents a color entry in palette analysis."""
+
+    hex: str
+    weight: float = Field(ge=0.0)
+
+
+class TypographyFeature(BaseModel):
+    """Descriptor for typography presence and style."""
+
+    present: bool = False
+    style: Optional[Literal["rounded", "block", "script", "outline", "mixed"]] = None
+
+
+class CompositionFeature(BaseModel):
+    """Structural layout traits detected in an image."""
+
+    centered: bool = False
+    symmetry: float = Field(default=0.0, ge=0.0, le=1.0)
+    grid: bool = False
+
+
+class Feature(BaseModel):
+    """Low-level features extracted from an individual reference."""
+
+    reference_id: str
+    palette: List[PaletteColor]
+    line_weight: float = Field(ge=0.0, le=1.0)
+    outline_clarity: float = Field(ge=0.0, le=1.0)
+    fill_ratio: float = Field(ge=0.0, le=1.0)
+    typography: TypographyFeature = Field(default_factory=TypographyFeature)
+    motifs: List[str] = Field(default_factory=list, min_items=0)
+    composition: CompositionFeature = Field(default_factory=CompositionFeature)
+    brand_risk: float = Field(ge=0.0, le=1.0)
+
+
+class DatasetTraits(BaseModel):
+    """Aggregated traits calculated for a dataset of references."""
+
+    session_id: str
+    palette: List[PaletteColor]
+    motifs: List[str]
+    line_weight: Literal["thin", "regular", "bold"]
+    outline: Literal["clean", "rough"]
+    typography: List[str]
+    composition: List[str]
+    audience_modes: List[str]
+
+
 class SessionCreateRequest(BaseModel):
     """Request payload for initiating discovery."""
 

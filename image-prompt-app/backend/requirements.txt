@@ -8,3 +8,5 @@ pytest
 httpx
 Pillow
 numpy
+scikit-image
+open-clip-torch

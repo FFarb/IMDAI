@@ -68,3 +68,65 @@ export interface DiscoverySearchPayload {
   adapters?: string[];
   limit?: number;
 }
+
+export interface PaletteColor {
+  hex: string;
+  weight: number;
+}
+
+export type TypographyStyle = 'rounded' | 'block' | 'script' | 'outline' | 'mixed';
+
+export interface TypographyFeature {
+  present: boolean;
+  style?: TypographyStyle | null;
+}
+
+export interface CompositionFeature {
+  centered: boolean;
+  symmetry: number;
+  grid: boolean;
+}
+
+export interface FeatureDescriptor {
+  reference_id: string;
+  palette: PaletteColor[];
+  line_weight: number;
+  outline_clarity: number;
+  fill_ratio: number;
+  typography: TypographyFeature;
+  motifs: string[];
+  composition: CompositionFeature;
+  brand_risk: number;
+}
+
+export type LineWeightLabel = 'thin' | 'regular' | 'bold';
+export type OutlineLabel = 'clean' | 'rough';
+
+export interface DatasetTraits {
+  session_id: string;
+  palette: PaletteColor[];
+  motifs: string[];
+  line_weight: LineWeightLabel;
+  outline: OutlineLabel;
+  typography: string[];
+  composition: string[];
+  audience_modes: string[];
+}
+
+export interface AnalyzeResponse {
+  started: boolean;
+  total: number;
+}
+
+export interface MasterPromptPayload {
+  prompt_text: string;
+  prompt_json: Record<string, unknown>;
+}
+
+export interface TraitWeights {
+  palette: number;
+  motifs: number;
+  line: number;
+  type: number;
+  comp: number;
+}

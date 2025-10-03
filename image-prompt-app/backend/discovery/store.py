@@ -7,16 +7,20 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Sequence
 
 from .models import (
     DiscoverSession,
     DiscoverStats,
+    Feature,
     Reference,
+    DatasetTraits,
 )
 
 _DB_FILENAME = "discovery.sqlite3"
 _REFERENCE_TABLE = "discovery_references"
+_FEATURE_TABLE = "discovery_features"
+_TRAITS_TABLE = "discovery_traits"
 
 
 class DiscoveryStore:
@@ -60,6 +64,26 @@ class DiscoveryStore:
                     url TEXT NOT NULL,
                     thumb_url TEXT NOT NULL,
                     payload TEXT NOT NULL,
+                    FOREIGN KEY(session_id) REFERENCES sessions(id)
+                )
+                """
+            )
+            conn.execute(
+                f"""
+                CREATE TABLE IF NOT EXISTS {_FEATURE_TABLE} (
+                    reference_id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    FOREIGN KEY(session_id) REFERENCES sessions(id)
+                )
+                """
+            )
+            conn.execute(
+                f"""
+                CREATE TABLE IF NOT EXISTS {_TRAITS_TABLE} (
+                    session_id TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
                     FOREIGN KEY(session_id) REFERENCES sessions(id)
                 )
                 """
@@ -214,6 +238,91 @@ class DiscoveryStore:
                 "UPDATE sessions SET status = ? WHERE id = ?",
                 (status, session_id),
             )
+
+    def upsert_features(self, session_id: str, features: Sequence[Feature]) -> None:
+        """Persist extracted features for a set of references."""
+        if not features:
+            return
+        with self._lock, self._connection() as conn:
+            conn.executemany(
+                f"""
+                INSERT INTO {_FEATURE_TABLE} (reference_id, session_id, payload)
+                VALUES (?, ?, ?)
+                ON CONFLICT(reference_id) DO UPDATE SET
+                    session_id=excluded.session_id,
+                    payload=excluded.payload
+                """,
+                [
+                    (
+                        feature.reference_id,
+                        session_id,
+                        feature.model_dump_json(),
+                    )
+                    for feature in features
+                ],
+            )
+
+    def get_feature(self, session_id: str, reference_id: str) -> Optional[Feature]:
+        """Fetch features for a single reference if available."""
+        with self._connection() as conn:
+            row = conn.execute(
+                f"SELECT payload FROM {_FEATURE_TABLE} WHERE reference_id = ? AND session_id = ?",
+                (reference_id, session_id),
+            ).fetchone()
+        if not row:
+            return None
+        return Feature.model_validate_json(row["payload"])
+
+    def get_features(self, session_id: str) -> Dict[str, Feature]:
+        """Return all features for a session keyed by reference id."""
+        with self._connection() as conn:
+            rows = conn.execute(
+                f"SELECT reference_id, payload FROM {_FEATURE_TABLE} WHERE session_id = ?",
+                (session_id,),
+            ).fetchall()
+        return {
+            str(row["reference_id"]): Feature.model_validate_json(row["payload"])
+            for row in rows
+        }
+
+    def delete_features(self, session_id: str, reference_ids: Sequence[str]) -> None:
+        """Remove feature records for references no longer relevant."""
+        if not reference_ids:
+            return
+        with self._lock, self._connection() as conn:
+            conn.executemany(
+                f"DELETE FROM {_FEATURE_TABLE} WHERE session_id = ? AND reference_id = ?",
+                [(session_id, ref_id) for ref_id in reference_ids],
+            )
+
+    def upsert_traits(self, traits: DatasetTraits) -> None:
+        """Persist aggregated dataset traits for reuse."""
+        with self._lock, self._connection() as conn:
+            conn.execute(
+                f"""
+                INSERT INTO {_TRAITS_TABLE} (session_id, payload, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    payload=excluded.payload,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    traits.session_id,
+                    traits.model_dump_json(),
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+
+    def get_traits(self, session_id: str) -> Optional[DatasetTraits]:
+        """Retrieve cached dataset traits if available."""
+        with self._connection() as conn:
+            row = conn.execute(
+                f"SELECT payload FROM {_TRAITS_TABLE} WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return DatasetTraits.model_validate_json(row["payload"])
 
 
 store = DiscoveryStore()
