@@ -29,14 +29,14 @@ B) Survey recent roundups/galleries (kids-safe). Extract:
    - MOOD: up to 3 words
    - NEGATIVE: must include ["photo-realism","photographic textures","noise","background patterns","brand logos","trademark words"]
    - SEED_EXAMPLES: 2–3 short descriptions (no brands)
-   - SOURCES: up to 10 {title,url} (links; no images)
+   - SOURCES: up to 10 {{title,url}} (links; no images)
 C) Compose a final MASTER PROMPT (text) that **explicitly** includes:
    "transparent background, no shadows, no gradients, no textures, clean vector edges, centered standalone composition"
 D) Provide a mirrored MASTER PROMPT JSON for programmatic use.
 
 STRICT JSON SCHEMA:
-{
-  "palette": [{"hex":"#RRGGBB","weight":0.18}, ... 5-7 items ...],
+{{
+  "palette": [{{"hex":"#RRGGBB","weight":0.18}}, ... 5-7 items ...],
   "motifs": ["short tag","... (8-12) ..."],
   "line_weight": "thin|regular|bold",
   "outline": "clean|rough",
@@ -47,9 +47,9 @@ STRICT JSON SCHEMA:
   "mood": ["soft","cozy","premium minimal"],
   "seed_examples": ["...","..."],
   "negative": ["photo-realism","photographic textures","noise","background patterns","brand logos","trademark words"],
-  "sources": [{"title":"...","url":"..."}],
+  "sources": [{{"title":"...","url":"..."}}],
   "master_prompt_text": "FULL TEXT PROMPT HERE",
-  "master_prompt_json": {
+  "master_prompt_json": {{
     "subject":"...",
     "palette":["#..."],
     "motifs":[...],
@@ -59,8 +59,8 @@ STRICT JSON SCHEMA:
     "composition":[...],
     "mood":[...],
     "negative":[...]
-  }
-}
+  }}
+}}
 
 REQUIREMENTS:
 - Return JSON only (no prose).

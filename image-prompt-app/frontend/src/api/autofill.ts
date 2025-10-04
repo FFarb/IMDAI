@@ -5,28 +5,51 @@ import type {
   ResearchResult,
 } from '../types/autofill';
 
-const AUTOFILL_API = '/api/autofill';
+const API_BASE = import.meta.env.VITE_API_BASE || '';
+const AUTOFILL_API = `${API_BASE}/api/autofill`;
 
-async function parseResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    let detail: string | undefined;
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<{
+  data: T;
+  warning: string | null;
+}> {
+  const response = await fetch(url, init);
+  const text = await response.text();
+  let parsed: unknown = null;
+
+  if (text) {
     try {
-      const data = await response.json();
-      detail = typeof data.detail === 'string' ? data.detail : JSON.stringify(data);
+      parsed = JSON.parse(text);
     } catch (error) {
-      detail = await response.text();
+      // Ignore JSON parsing errors; handled via message below.
     }
-    throw new Error(detail || 'Autofill API request failed');
   }
-  return response.json() as Promise<T>;
-}
 
-function extractWarning(response: Response): string | null {
-  return response.headers.get('X-Autofill-Warning');
+  if (!response.ok) {
+    const body = parsed as Record<string, unknown> | null;
+    const detail =
+      (body &&
+        (typeof body.detail === 'string'
+          ? body.detail
+          : typeof body.message === 'string'
+            ? body.message
+            : undefined)) ||
+      text ||
+      `${response.status} ${response.statusText}`;
+    throw new Error(detail);
+  }
+
+  if (parsed === null) {
+    throw new Error('Autofill API returned an empty response');
+  }
+
+  return {
+    data: parsed as T,
+    warning: response.headers.get('X-Autofill-Warning'),
+  };
 }
 
 export async function postResearch(payload: ResearchPayload): Promise<ResearchResult> {
-  const response = await fetch(`${AUTOFILL_API}/research`, {
+  const { data, warning } = await fetchJson<AutofillResponse>(`${AUTOFILL_API}/research`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -36,22 +59,23 @@ export async function postResearch(payload: ResearchPayload): Promise<ResearchRe
       flags: payload.flags,
     }),
   });
-  const data = await parseResponse<AutofillResponse>(response);
-  return { data, warning: extractWarning(response) };
+  return { data, warning };
 }
 
 export async function postOneClickGenerate(payload: ResearchPayload): Promise<OneClickResult> {
-  const response = await fetch(`${AUTOFILL_API}/one_click_generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      topic: payload.topic,
-      audience: payload.audience,
-      age: payload.age,
-      flags: payload.flags,
-      images_n: payload.images_n,
-    }),
-  });
-  const data = await parseResponse<OneClickResult['data']>(response);
-  return { data, warning: extractWarning(response) };
+  const { data, warning } = await fetchJson<OneClickResult['data']>(
+    `${AUTOFILL_API}/one_click_generate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic: payload.topic,
+        audience: payload.audience,
+        age: payload.age,
+        flags: payload.flags,
+        images_n: payload.images_n,
+      }),
+    },
+  );
+  return { data, warning };
 }

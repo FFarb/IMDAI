@@ -46,7 +46,18 @@ async def _dispatch_image_generation(request: Request, payload: Dict[str, Any]) 
 
 
 def _compose_user_prompt(req: ResearchRequest) -> str:
-    return USER_PROMPT_TEMPLATE.format(topic=req.topic, audience=req.audience, age=req.age)
+    try:
+        return USER_PROMPT_TEMPLATE.format(
+            topic=req.topic, audience=req.audience, age=req.age
+        )
+    except KeyError:
+        safe_template = USER_PROMPT_TEMPLATE.replace("{", "{{").replace("}", "}}")
+        safe_template = (
+            safe_template.replace("{{topic}}", "{topic}")
+            .replace("{{audience}}", "{audience}")
+            .replace("{{age}}", "{age}")
+        )
+        return safe_template.format(topic=req.topic, audience=req.audience, age=req.age)
 
 
 async def _execute_research(
