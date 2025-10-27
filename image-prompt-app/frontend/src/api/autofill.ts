@@ -49,11 +49,12 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<{
 }
 
 export async function postResearch(payload: ResearchPayload): Promise<ResearchResult> {
+  const topic = payload.topic.trim();
   const { data, warning } = await fetchJson<AutofillResponse>(`${AUTOFILL_API}/research`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      topic: payload.topic,
+      topic,
       audience: payload.audience,
       age: payload.age,
       flags: payload.flags,
@@ -63,13 +64,14 @@ export async function postResearch(payload: ResearchPayload): Promise<ResearchRe
 }
 
 export async function postOneClickGenerate(payload: ResearchPayload): Promise<OneClickResult> {
+  const topic = payload.topic.trim();
   const { data, warning } = await fetchJson<OneClickResult['data']>(
     `${AUTOFILL_API}/one_click_generate`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        topic: payload.topic,
+        topic,
         audience: payload.audience,
         age: payload.age,
         flags: payload.flags,

@@ -124,13 +124,24 @@ class OpenAIResponsesProvider:
             except httpx.HTTPStatusError as exc:  # type: ignore[unreachable]
                 last_error = exc
                 message = exc.response.text
-                LOGGER.error("OpenAI Responses API returned %s: %s", exc.response.status_code, message)
-                if use_web and exc.response.status_code in {400, 404, 422}:
+                status_code = exc.response.status_code
+                log_suffix = ""
+                if status_code in {401, 403}:
+                    log_suffix = " Check OPENAI_API_KEY and model access."
+                LOGGER.error(
+                    "OpenAI Responses API returned %s: %s.%s",
+                    status_code,
+                    message,
+                    log_suffix,
+                )
+                if use_web and status_code in {400, 404, 422}:
                     detail = (message or "").lower()
                     if "tool" in detail or "web" in detail:
                         raise WebToolUnavailableError("OpenAI web tool unavailable") from exc
-                if exc.response.status_code in {401, 403}:
-                    raise ResearchProviderError("Unauthorized OpenAI request") from exc
+                if status_code in {401, 403}:
+                    raise ResearchProviderError(
+                        "Unauthorized OpenAI request. Check OPENAI_API_KEY and model access."
+                    ) from exc
             except (json.JSONDecodeError, ResearchProviderError) as exc:
                 last_error = exc
                 LOGGER.warning("Failed to parse JSON output: %s", exc)

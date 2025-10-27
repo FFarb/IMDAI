@@ -2,7 +2,8 @@ import os
 import json
 import logging
 from datetime import datetime
-from dotenv import load_dotenv
+from pathlib import Path
+from dotenv import load_dotenv, set_key
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -16,6 +17,7 @@ from server.autofill.router import router as autofill_router
 logging.basicConfig(level=logging.INFO)
 load_dotenv()
 
+ENV_PATH = Path(__file__).resolve().parent / ".env"
 API_KEY_STORE = {"api_key": os.getenv("OPENAI_API_KEY")}
 PRESETS_FILE = "../presets.json" # Path to presets file in the root folder
 
@@ -25,6 +27,7 @@ client = None
 def initialize_openai_client():
     global client
     if API_KEY_STORE["api_key"]:
+        os.environ["OPENAI_API_KEY"] = API_KEY_STORE["api_key"]
         try:
             client = openai.OpenAI(api_key=API_KEY_STORE["api_key"])
             logging.info("OpenAI client initialized successfully.")
@@ -95,6 +98,30 @@ def create_directories():
 
 create_directories()
 
+def persist_api_key(value: str) -> None:
+    try:
+        if not ENV_PATH.exists():
+            ENV_PATH.touch()
+        set_key(str(ENV_PATH), "OPENAI_API_KEY", value)
+    except Exception as exc:
+        logging.warning("Failed to persist API key to .env: %s", exc)
+
+
+@app.on_event("startup")
+async def verify_api_key() -> None:
+    api_key = API_KEY_STORE.get("api_key")
+    if not api_key:
+        logging.warning(
+            "OPENAI_API_KEY is not configured. Set a valid key via /api/settings/key."
+        )
+        return
+
+    os.environ.setdefault("OPENAI_API_KEY", api_key)
+    if "your-api" in api_key.lower():
+        logging.warning(
+            "OPENAI_API_KEY appears to be a placeholder. Check your environment configuration."
+        )
+
 MASTER_PROMPT_TEMPLATE = """
 You are an expert image prompt generator. Your task is to take a set of input 'slots' and combine them into a coherent, high-quality positive and negative prompt for an AI image generator. The user wants a style-aware prompt.
 
@@ -115,12 +142,44 @@ Here are the input slots:
 - Quality: {quality}
 """
 
+def _bool_from_env(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+@app.get("/api/meta/options")
+async def get_meta_options() -> Dict[str, Any]:
+    audiences = ["kids", "teens", "adults", "family", "custom"]
+    ages = ["0–2", "3–5", "6–8", "9–12", "13+", "custom"]
+    default_flags = {
+        "use_web": _bool_from_env("RESEARCH_USE_WEB_DEFAULT", True),
+        "avoid_brands": _bool_from_env("RESEARCH_AVOID_BRANDS", True),
+        "kids_safe": _bool_from_env("RESEARCH_KIDS_SAFE", True),
+    }
+    response: Dict[str, Any] = {
+        "audiences": audiences,
+        "ages": ages,
+        "default_flags": default_flags,
+        "research_models": ["gpt-4.1", "gpt-4o", "gpt-4o-mini"],
+        "image_models": ["gpt-image-1"],
+        "defaults": {
+            "research_provider": os.getenv("RESEARCH_PROVIDER", "openai_web"),
+            "research_model": os.getenv("RESEARCH_MODEL", "gpt-4.1"),
+            "research_timeout_s": float(os.getenv("RESEARCH_TIMEOUT_S", "45")),
+        },
+    }
+    return response
+
 # --- API Endpoints ---
 @app.post("/api/settings/key")
 async def set_api_key(key: ApiKey):
     if not key.api_key:
         raise HTTPException(status_code=400, detail="API key cannot be empty.")
     API_KEY_STORE["api_key"] = key.api_key
+    os.environ["OPENAI_API_KEY"] = key.api_key
+    persist_api_key(key.api_key)
     initialize_openai_client()
     return {"message": "API key updated successfully."}
 

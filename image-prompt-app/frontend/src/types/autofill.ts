@@ -12,6 +12,8 @@ export interface ResearchPayload {
   age: string;
   flags: ResearchFlags;
   images_n?: number;
+  researchModel?: string;
+  imageModel?: string;
 }
 
 export interface PaletteColor {
