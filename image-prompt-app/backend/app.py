@@ -1,15 +1,16 @@
-import os
+import base64
 import json
 import logging
+import os
 from datetime import datetime
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
-import openai
 
-from discovery.router import prompt_router as discovery_prompt_router, router as discovery_router
+from openai import OpenAI
+
 from server.autofill.router import router as autofill_router
 
 # --- Configuration & Initialization ---
@@ -20,25 +21,27 @@ API_KEY_STORE = {"api_key": os.getenv("OPENAI_API_KEY")}
 PRESETS_FILE = "../presets.json" # Path to presets file in the root folder
 
 app = FastAPI()
-client = None
+client: Optional[OpenAI] = None
 
-def initialize_openai_client():
+
+def initialize_openai_client() -> None:
+    """Initialise the reusable OpenAI client for prompt assembly and images."""
+
     global client
     if API_KEY_STORE["api_key"]:
         try:
-            client = openai.OpenAI(api_key=API_KEY_STORE["api_key"])
+            client = OpenAI(api_key=API_KEY_STORE["api_key"])
             logging.info("OpenAI client initialized successfully.")
-        except Exception as e:
+        except Exception as e:  # pragma: no cover - defensive log path
             client = None
             logging.error(f"Failed to initialize OpenAI client: {e}")
     else:
         client = None
         logging.warning("OpenAI client not initialized. API key is missing.")
 
+
 initialize_openai_client()
 
-app.include_router(discovery_router, prefix="/api/discover")
-app.include_router(discovery_prompt_router)
 app.include_router(autofill_router, prefix="/api")
 
 # --- CORS Middleware ---
@@ -54,9 +57,8 @@ app.add_middleware(
 BASE_NEG = "ugly, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, extra limbs, disfigured, deformed, body out of frame, bad anatomy, watermark, signature, cut off, low contrast, underexposed, overexposed, bad art, beginner, amateur, distorted face"
 
 DEFAULT_PARAMS = {
-    "size": "1024x1024",
-    "quality": "standard",
-    "style": "vivid"
+    "size": "1536x1024",
+    "quality": "low",
 }
 
 class Slots(BaseModel):
@@ -150,9 +152,9 @@ async def assemble_prompt(slots: Slots):
 
                 # --- Defensive Check ---
                 # Ensure size is valid, otherwise default it.
-                valid_sizes = ["1024x1024", "1024x1792", "1792x1024"]
+                valid_sizes = ["1536x1024", "1024x1024", "1024x1792", "1792x1024"]
                 if final_params.get("size") not in valid_sizes:
-                    final_params["size"] = "1024x1024"
+                    final_params["size"] = DEFAULT_PARAMS["size"]
 
                 data["params"] = final_params
                 return PromptDTO(**data)
@@ -177,22 +179,19 @@ async def generate_image(req: ImageRequest):
     try:
         prompt = req.prompt
         response = client.images.generate(
-            model="dall-e-3",
+            model="gpt-image-1",
             prompt=prompt.positive,
             n=req.n,
-            size=prompt.params.get("size", "1024x1024"),
-            quality=prompt.params.get("quality", "standard"),
-            style=prompt.params.get("style", "vivid"),
+            size=prompt.params.get("size", DEFAULT_PARAMS["size"]),
+            quality=prompt.params.get("quality", DEFAULT_PARAMS["quality"]),
         )
 
-        saved_files = []
+        saved_files: List[Dict[str, Any]] = []
         import httpx
-        async with httpx.AsyncClient() as http_client:
-            for i, image_data in enumerate(response.data):
-                image_url = image_data.url
-                image_response = await http_client.get(image_url)
-                image_response.raise_for_status()
 
+        http_client: Optional[httpx.AsyncClient] = None
+        try:
+            for i, image_data in enumerate(response.data):
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 base_filename = f"{timestamp}_{i+1}"
                 image_filename = f"{base_filename}.png"
@@ -201,13 +200,32 @@ async def generate_image(req: ImageRequest):
                 image_filepath = os.path.join("data", "outputs", image_filename)
                 json_filepath = os.path.join("data", "outputs", json_filename)
 
+                image_bytes: Optional[bytes] = None
+                if getattr(image_data, "b64_json", None):
+                    image_bytes = base64.b64decode(image_data.b64_json)
+                elif getattr(image_data, "url", None):
+                    if http_client is None:
+                        http_client = httpx.AsyncClient()
+                    image_response = await http_client.get(image_data.url)
+                    image_response.raise_for_status()
+                    image_bytes = image_response.content
+
+                if not image_bytes:
+                    raise HTTPException(status_code=502, detail="Image generation failed: empty payload")
+
                 with open(image_filepath, "wb") as f:
-                    f.write(image_response.content)
+                    f.write(image_bytes)
+
+                prompt_payload = prompt.model_dump()
 
                 with open(json_filepath, "w") as f:
-                    json.dump(prompt.dict(), f, indent=2)
+                    json.dump(prompt_payload, f, indent=2)
 
-                saved_files.append({"image_path": f"/images/{image_filename}", "prompt": prompt.dict()})
+                saved_files.append({"image_path": f"/images/{image_filename}", "prompt": prompt_payload})
+
+        finally:
+            if http_client is not None:
+                await http_client.aclose()
 
         return saved_files
 

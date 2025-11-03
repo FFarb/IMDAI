@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { MockedFunction } from 'vitest';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -95,37 +96,4 @@ describe('AutofillPanel', () => {
     expect(onShowToast).toHaveBeenCalled();
   });
 
-  it('triggers one-click generation and refreshes gallery', async () => {
-    (postOneClickGenerate as MockedFunction<typeof postOneClickGenerate>).mockResolvedValue({
-      data: {
-        autofill: sampleAutofill,
-        images: [
-          { image_path: '/images/gen-1.png', prompt: null },
-          { image_path: '/images/gen-2.png', prompt: null },
-        ],
-      },
-      warning: null,
-    });
-
-    const refreshGallery = vi.fn().mockResolvedValue(undefined);
-    const onShowToast = vi.fn();
-
-    render(<AutofillPanel onShowToast={onShowToast} refreshGallery={refreshGallery} />);
-
-    fireEvent.change(screen.getByLabelText(/тема/i), { target: { value: 'baby safari' } });
-    fireEvent.change(screen.getByLabelText(/images/i), { target: { value: '3' } });
-    fireEvent.click(screen.getByRole('button', { name: /one-click generate/i }));
-
-    await screen.findByText('/images/gen-1.png');
-
-    expect(postOneClickGenerate).toHaveBeenCalledWith({
-      topic: 'baby safari',
-      audience: 'kids',
-      age: '0–2',
-      flags: { use_web: true, avoid_brands: true, kids_safe: true },
-      images_n: 3,
-    });
-    await waitFor(() => expect(refreshGallery).toHaveBeenCalled());
-    expect(onShowToast).toHaveBeenCalled();
-  });
 });

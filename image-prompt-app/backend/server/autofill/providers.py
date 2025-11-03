@@ -13,7 +13,7 @@ from .models import AUTOFILL_JSON_SCHEMA
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_MODEL = os.getenv("RESEARCH_MODEL", "gpt-4.1")
+DEFAULT_MODEL = os.getenv("RESEARCH_MODEL", "gpt-4.1-nano")
 DEFAULT_TIMEOUT = float(os.getenv("RESEARCH_TIMEOUT_S", "45"))
 DEFAULT_PROVIDER = os.getenv("RESEARCH_PROVIDER", "openai_web")
 
@@ -59,7 +59,7 @@ class OpenAIResponsesProvider:
         user_prompt: str,
         use_web: bool,
     ) -> Dict[str, Any]:
-        tools = [{"type": "web"}] if use_web else []
+        tools = [{"type": "web_search"}] if use_web else []
         return {
             "model": self.model,
             "tools": tools,
@@ -79,6 +79,12 @@ class OpenAIResponsesProvider:
             "max_output_tokens": 1600,
         }
 
+    def _parse_json(self, value: str) -> Dict[str, Any]:
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ResearchProviderError("Failed to decode JSON payload") from exc
+
     def _extract_json(self, response_payload: Dict[str, Any]) -> Dict[str, Any]:
         if "output" in response_payload:
             for block in response_payload["output"]:
@@ -88,11 +94,11 @@ class OpenAIResponsesProvider:
                 for item in content:
                     text = item.get("text") or item.get("value")
                     if text:
-                        return json.loads(text)
+                        return self._parse_json(text)
         if "output_text" in response_payload:
-            return json.loads(response_payload["output_text"])
+            return self._parse_json(response_payload["output_text"])
         if "data" in response_payload:
-            return json.loads(response_payload["data"][0]["content"][0]["text"])
+            return self._parse_json(response_payload["data"][0]["content"][0]["text"])
         raise ResearchProviderError("Unable to extract JSON payload from response")
 
     def research(

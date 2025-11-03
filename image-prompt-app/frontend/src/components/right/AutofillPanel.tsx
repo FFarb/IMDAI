@@ -20,6 +20,8 @@ const DEFAULT_FLAGS: ResearchFlags = {
 };
 
 const PRINT_READY_HINT = 'LLM draft — review before generation';
+const RESEARCH_MODEL = 'gpt-4.1-nano';
+const IMAGE_MODEL = 'gpt-image-1';
 
 async function copyToClipboard(value: string): Promise<boolean> {
   try {
@@ -164,6 +166,9 @@ const AutofillPanel = ({ onShowToast, refreshGallery }: AutofillPanelProps) => {
             <input type="checkbox" checked={flags.kids_safe} onChange={updateFlag('kids_safe')} /> Kids-safe
           </label>
         </div>
+        <p className="model-hint">
+          Research model: <code>{RESEARCH_MODEL}</code> · Image model: <code>{IMAGE_MODEL}</code>
+        </p>
         <div className="autofill-actions">
           <button type="button" onClick={handleResearch} disabled={isResearching || isGenerating} className="primary">
             {isResearching ? 'Researching…' : 'Research & Fill'}
@@ -186,8 +191,13 @@ const AutofillPanel = ({ onShowToast, refreshGallery }: AutofillPanelProps) => {
               }}
             />
           </div>
-          <button type="button" onClick={handleOneClick} disabled={isGenerating || isResearching}>
-            {isGenerating ? 'Generating…' : `One-Click Generate (${imagesCount})`}
+          <button
+            type="button"
+            data-testid="one-click-button"
+            onClick={handleOneClick}
+            disabled={isGenerating || isResearching}
+          >
+            {isGenerating ? 'Generating…' : `One-Click Image (${imagesCount})`}
           </button>
         </div>
       </section>

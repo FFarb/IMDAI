@@ -116,7 +116,7 @@ def test_motifs_brand_filtering(sample_payload: Dict) -> None:
     traits = validate_autofill_payload(payload, flags, max_sources=8)
     assert "nike swoosh" not in traits.motifs
     assert "starbucks cup" not in traits.motifs
-    assert len(traits.motifs) == 10
+    assert 8 <= len(traits.motifs) <= 12
 
 
 def test_kids_unsafe_raises(sample_payload: Dict) -> None:

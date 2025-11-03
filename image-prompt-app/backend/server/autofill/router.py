@@ -25,6 +25,8 @@ router = APIRouter(prefix="/autofill", tags=["autofill"])
 
 _provider: OpenAIResponsesProvider | None = None
 
+DEFAULT_IMAGE_PARAMS = {"size": "1536x1024", "quality": "low"}
+
 
 def get_provider() -> OpenAIResponsesProvider:
     global _provider
@@ -93,16 +95,39 @@ async def _execute_research(
         LOGGER.error("Failed to perform research: %s", exc)
         raise HTTPException(status_code=502, detail="Research provider failed") from exc
 
+    payload = dict(result.payload)
+    payload.setdefault("audience", req.audience)
+    payload.setdefault("age", req.age)
+
     try:
-        traits = validate_autofill_payload(result.payload, flags, MAX_SOURCES)
-        master_prompt_text = validate_master_prompt(traits, result.payload, flags)
+        traits = validate_autofill_payload(payload, flags, MAX_SOURCES)
+        master_prompt_text = validate_master_prompt(traits, payload, flags)
     except AutofillValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    raw_master_prompt_json = payload.get("master_prompt_json")
+    if not isinstance(raw_master_prompt_json, dict):
+        raw_master_prompt_json = {}
+
+    sanitized_master_prompt_json = {
+        **raw_master_prompt_json,
+        "subject": str(raw_master_prompt_json.get("subject") or req.topic).strip(),
+        "palette": [color.hex for color in traits.palette],
+        "motifs": traits.motifs,
+        "line": traits.line_weight,
+        "outline": traits.outline,
+        "typography": traits.typography,
+        "composition": traits.composition,
+        "mood": traits.mood,
+        "negative": traits.negative,
+        "audience": traits.audience,
+        "age": traits.age,
+    }
 
     autofill_response = AutofillResponse(
         traits=traits,
         master_prompt_text=master_prompt_text,
-        master_prompt_json=result.payload.get("master_prompt_json", {}),
+        master_prompt_json=sanitized_master_prompt_json,
     )
     return autofill_response
 
@@ -116,8 +141,8 @@ async def research(
     return await _execute_research(req, provider, response)
 
 
-@router.post("/one_click_generate")
-async def one_click_generate(
+@router.post("/one-click")
+async def one_click(
     req: ResearchRequest,
     response: Response,
     request: Request,
@@ -128,7 +153,7 @@ async def one_click_generate(
         "prompt": {
             "positive": autofill_response.master_prompt_text,
             "negative": ", ".join(autofill_response.traits.negative),
-            "params": {},
+            "params": dict(DEFAULT_IMAGE_PARAMS),
         },
         "n": req.images_n,
     }

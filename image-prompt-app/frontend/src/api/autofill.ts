@@ -57,6 +57,7 @@ export async function postResearch(payload: ResearchPayload): Promise<ResearchRe
       audience: payload.audience,
       age: payload.age,
       flags: payload.flags,
+      images_n: payload.images_n,
     }),
   });
   return { data, warning };
@@ -64,7 +65,7 @@ export async function postResearch(payload: ResearchPayload): Promise<ResearchRe
 
 export async function postOneClickGenerate(payload: ResearchPayload): Promise<OneClickResult> {
   const { data, warning } = await fetchJson<OneClickResult['data']>(
-    `${AUTOFILL_API}/one_click_generate`,
+    `${AUTOFILL_API}/one-click`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
