@@ -3,7 +3,7 @@ import axios from 'axios';
 
 interface SettingsModalProps {
   onClose: () => void;
-  onApiKeyUpdate: () => void;
+  onApiKeyUpdate?: () => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onApiKeyUpdate }) => {
@@ -14,7 +14,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onApiKeyUpdate }
     try {
       await axios.post('/api/settings/key', { api_key: apiKey });
       setMessage('API Key saved successfully!');
-      onApiKeyUpdate();
+      onApiKeyUpdate?.();
       setTimeout(() => {
         onClose();
       }, 1000);

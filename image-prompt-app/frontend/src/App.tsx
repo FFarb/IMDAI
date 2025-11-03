@@ -41,6 +41,9 @@ function App() {
   const [apiQuality, setApiQuality] = useState<ApiQuality>('low');
   const [apiSize, setApiSize] = useState<ApiSize>('1536x1024');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const handleApiKeyUpdate = useCallback(() => {
+    setToastMessage('API key saved successfully!');
+  }, []);
 
   const fetchGalleryImages = useCallback(async () => {
     try {
@@ -260,7 +263,12 @@ function App() {
 
       {toastMessage && <div className="toast">{toastMessage}</div>}
 
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsModal
+          onClose={() => setShowSettings(false)}
+          onApiKeyUpdate={handleApiKeyUpdate}
+        />
+      )}
     </div>
   );
 }
