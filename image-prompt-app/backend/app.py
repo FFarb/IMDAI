@@ -11,7 +11,7 @@ from typing import Dict, Any, List, Optional
 
 from openai import OpenAI
 
-from server.autofill.router import router as autofill_router
+from server.autofill.router import router as autofill_router, reset_provider
 
 # --- Configuration & Initialization ---
 logging.basicConfig(level=logging.INFO)
@@ -123,6 +123,8 @@ async def set_api_key(key: ApiKey):
     if not key.api_key:
         raise HTTPException(status_code=400, detail="API key cannot be empty.")
     API_KEY_STORE["api_key"] = key.api_key
+    os.environ["OPENAI_API_KEY"] = key.api_key
+    reset_provider(None)
     initialize_openai_client()
     return {"message": "API key updated successfully."}
 
