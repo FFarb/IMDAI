@@ -60,15 +60,15 @@ class OpenAIResponsesProvider:
         use_web: bool,
     ) -> Dict[str, Any]:
         tools = [{"type": "web_search"}] if use_web else []
-        return {
+        payload: Dict[str, Any] = {
             "model": self.model,
-            "tools": tools,
+            "modalities": ["text"],
             "input": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "response_format": {
-                "type": "json_schema",
+            "text": {
+                "format": "json_schema",
                 "json_schema": {
                     "name": "autofill_schema",
                     "strict": True,
@@ -78,6 +78,9 @@ class OpenAIResponsesProvider:
             "temperature": 0.3,
             "max_output_tokens": 1600,
         }
+        if tools:
+            payload["tools"] = tools
+        return payload
 
     def _parse_json(self, value: str) -> Dict[str, Any]:
         try:
