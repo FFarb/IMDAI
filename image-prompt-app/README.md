@@ -1,102 +1,111 @@
-# AI Image Prompt Engineer
+# IMDAI Image Prompt App
 
-This is a local browser app to assemble a style-aware image prompt with GPT and render images via the OpenAI Images API.
+A focused workspace for turning a single brief into sellable vector prompt ideas and ready-to-render image outputs. The app runs a three-stage pipeline – **Research → Synthesis → Images** – powered by OpenAI's Responses and Images APIs.
 
-## Features
+## What Changed
 
--   **Style-Aware Prompting**: Uses a powerful GPT model to turn simple keywords into detailed, effective prompts.
--   **Local Generation**: Runs a local backend and frontend for privacy and control.
--   **Image Gallery**: Stores and displays all your generated images locally.
--   **Generate up to 4 Images**: Create multiple image variations from a single prompt in one go.
--   **Download Images**: Save your favorite creations directly to your computer.
--   **Preset Management**: Save your favorite slot combinations as named presets and load them anytime.
--   **View Prompts**: See the exact prompt used to generate any image in your gallery.
--   **Color Palette**: A handy color picker to find and copy HEX codes for your prompts.
+- One-click pipeline that captures research insights, assembles up to five prompt variants, and renders images for each prompt.
+- Dedicated modes for **research-only**, **synthesis-only**, or **images-only** reruns without repeating the whole flow.
+- Strict JSON contracts enforced through the OpenAI Responses API with `response_format.type="json_schema"`.
+- Consistent `input_text` content parts for all Responses API calls and image generation via `gpt-image-1` at `1536x1024`.
 
 ## Tech Stack
 
--   **Frontend**: React, Vite, TypeScript, Axios
--   **Backend**: FastAPI (Python)
--   **AI**: OpenAI API (Chat Completions & Images)
+- **Backend**: FastAPI, Pydantic v2, httpx, python-dotenv, OpenAI SDK ≥ 1.50
+- **Frontend**: React, Vite, TypeScript
+- **AI Models**: `gpt-4.1-nano` (Responses API with optional `web_search`), `gpt-image-1` (Images API)
 
-## Quickstart
+## Prerequisites
 
-### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- An OpenAI API key with access to the Responses and Images APIs (`OPENAI_API_KEY`)
 
--   Python 3.8+ and `pip`
--   Node.js 18+ and `npm`
+## Quick Start
 
-### 1. Setup Backend
+### 1. Configure Environment
 
-Navigate to the `backend` directory and set up the environment.
+The backend reads `OPENAI_API_KEY` from environment variables. Create an `.env` file inside `image-prompt-app/backend/` with:
 
 ```bash
-# Navigate to the backend folder
-cd backend
-
-# Create and activate a virtual environment (optional but recommended)
-# On Mac/Linux
-python3 -m venv venv
-source venv/bin/activate
-# On Windows
-python -m venv venv
-.\venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Create your environment file
-# On Mac/Linux
-cp .env.example .env
-# On Windows
-copy .env.example .env
+OPENAI_API_KEY=sk-your-key-here
 ```
 
-Now, **edit the `.env` file** and add your OpenAI API key.
+A sample file is provided as `.env.example` if you prefer to copy it.
 
-### 2. Setup Frontend
+### 2. Install Dependencies
 
-Open a **new terminal window**. Navigate to the `frontend` directory.
+#### Cross-platform helpers (Windows batch files included)
+
+At the repository root:
 
 ```bash
-# Navigate to the frontend folder
-cd frontend
+./setup_env.bat    # Windows
+```
 
-# Install dependencies
+For macOS/Linux or manual control:
+
+```bash
+cd image-prompt-app/backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env  # then edit OPENAI_API_KEY
+
+cd ../frontend
 npm install
 ```
 
-### 3. Run the Application
+### 3. Run in Development
 
-You need to have both the backend and frontend servers running.
-
-**In your first terminal (backend):**
+From the repository root you can start both servers on Windows with:
 
 ```bash
-# Make sure you are in the backend/ directory with venv active
-uvicorn app:app --reload
+./start_dev.bat
 ```
 
-The backend server will start on `http://127.0.0.1:8000`.
-
-**In your second terminal (frontend):**
+Or launch them manually:
 
 ```bash
-# Make sure you are in the frontend/ directory
+# Backend
+cd image-prompt-app/backend
+source venv/bin/activate
+uvicorn app:app --reload
+
+# Frontend (in a second terminal)
+cd image-prompt-app/frontend
 npm run dev
 ```
 
-The frontend development server will start on `http://localhost:5173`. Open this URL in your browser.
+The frontend runs on `http://localhost:5173` and proxies requests to the FastAPI backend at `http://127.0.0.1:8000`.
 
-### How to Use
+## Using the App
 
-1.  The app will open. Click the **settings icon (⚙️)** in the top right.
-2.  Enter your OpenAI API Key and click **Save**. The key is stored securely on the backend only.
-3.  Fill in the different "slots" on the left panel, or select a pre-made preset from the dropdown.
-4.  Use the **Color Palette** to find the perfect color and copy its HEX code into your prompt slots.
-5.  To save your current slots for later, type a name in the "Save Current as Preset" field and click **Save**.
-6.  Click **Assemble Prompt**. The backend GPT model will generate a detailed JSON prompt.
-7.  Select the **Number of Images** you'd like to create (1-4).
-8.  Click **Generate Image(s)**.
-9.  Your new images will appear in the gallery. Hover over any image to see buttons to **View Prompt** or **Download** it.
-10. All images and their prompt data are saved locally in `backend/data/outputs/`.
+1. **Brief** – Set topic, audience, age range, depth (1–5), prompt variants (1–5), and images per prompt (1–4). Click **Generate** for the full pipeline or trigger individual stages.
+2. **Research Board** – Inspect fetched references, motifs, palette, typography, mood, hooks, and notes extracted from live search.
+3. **Assembled Prompts** – Edit synthesized prompts, adjust negative tags, copy or locally save prompts, and request per-prompt image runs.
+4. **Gallery** – Review generated images (URLs or base64 payloads), request variations, regenerate, copy prompts, or download assets.
+
+Errors such as a missing API key return clear 400 responses, and downstream API failures surface as 502s with short explanations. Toast notifications in the UI highlight successes and actionable errors.
+
+## API Overview
+
+- `POST /api/generate` orchestrates every stage. Payload fields:
+  - `mode`: `full`, `research_only`, `synthesis_only`, or `images_only`
+  - `topic`, `audience`, `age`, `depth`, `variants`, `images_per_prompt`
+  - Optional `research` and `synthesis` objects to reuse prior outputs
+  - Optional `selected_prompt_index` when `mode="images_only"`
+- `GET /api/health` reports service readiness and API key presence.
+
+## Tests
+
+Backend tests ensure the health endpoint works and that `/api/generate` rejects requests when the API key is missing. Run them with:
+
+```bash
+cd image-prompt-app/backend
+pytest
+```
+
+---
+
+With a single click you can now move from market insights to production-ready images, without juggling separate tools or redundant toggles.

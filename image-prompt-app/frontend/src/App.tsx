@@ -1,274 +1,220 @@
-import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
-import axios from 'axios';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import SettingsModal from './components/SettingsModal';
-import ColorPicker from './components/ColorPicker';
-import GalleryItem from './components/GalleryItem';
-import AutofillPanel from './components/right/AutofillPanel';
-import type { ImageWithPrompt, PromptDTO } from './types/promptBuilder';
+import { generatePipeline } from './api/generate';
+import { BriefCard, type BriefValues } from './components/BriefCard';
+import { GalleryGrid } from './components/GalleryGrid';
+import { PromptTabs } from './components/PromptTabs';
+import { ResearchBoard } from './components/ResearchBoard';
+import type {
+  GenerateMode,
+  GenerateRequest,
+  GenerateResponse,
+  ImageResult,
+  ResearchOutput,
+  SynthPrompt,
+  SynthesisOutput,
+} from './types/pipeline';
 
-interface Slots {
-  subject: string;
-  style: string;
-  composition: string;
-  lighting: string;
-  mood: string;
-  details: string;
-  quality: string;
-}
-
-type ApiQuality = 'low' | 'high';
-type ApiSize = '1024x1024' | '1024x1792' | '1792x1024' | '1536x1024';
+const defaultBrief: BriefValues = {
+  topic: '',
+  audience: 'kids',
+  age: '6-9',
+  depth: 3,
+  variants: 2,
+  imagesPerPrompt: 1,
+};
 
 function App() {
-  const [slots, setSlots] = useState<Slots>({
-    subject: '',
-    style: '',
-    composition: '',
-    lighting: '',
-    mood: '',
-    details: '',
-    quality: 'masterpiece, high detail, 8k',
-  });
-  const [assembledPrompt, setAssembledPrompt] = useState<PromptDTO | null>(null);
-  const [galleryImages, setGalleryImages] = useState<ImageWithPrompt[]>([]);
+  const [brief, setBrief] = useState<BriefValues>(defaultBrief);
+  const [research, setResearch] = useState<ResearchOutput | null>(null);
+  const [synthesis, setSynthesis] = useState<SynthesisOutput | null>(null);
+  const [images, setImages] = useState<ImageResult[][] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [presets, setPresets] = useState<Record<string, Slots>>({});
-  const [showSettings, setShowSettings] = useState(false);
-  const [newPresetName, setNewPresetName] = useState('');
-  const [numImages, setNumImages] = useState(1);
-  const [apiQuality, setApiQuality] = useState<ApiQuality>('low');
-  const [apiSize, setApiSize] = useState<ApiSize>('1536x1024');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const handleApiKeyUpdate = useCallback(() => {
-    setToastMessage('API key saved successfully!');
-  }, []);
-
-  const fetchGalleryImages = useCallback(async () => {
-    try {
-      const response = await axios.get<ImageWithPrompt[]>('/api/images');
-      setGalleryImages(response.data);
-    } catch (err) {
-      console.error('Failed to fetch images', err);
-    }
-  }, []);
-
-  const fetchPresets = useCallback(async () => {
-    try {
-      const response = await fetch(`/presets.json?t=${new Date().getTime()}`);
-      if (!response.ok) throw new Error('Network response was not ok');
-      const data = await response.json();
-      setPresets(data);
-    } catch (err) {
-      console.error('Failed to load presets', err);
-    }
-  }, []);
 
   useEffect(() => {
-    fetchGalleryImages();
-    fetchPresets();
-  }, [fetchGalleryImages, fetchPresets]);
+    if (!message && !error) return;
+    const timer = window.setTimeout(() => {
+      setMessage(null);
+      setError(null);
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [message, error]);
 
-  useEffect(() => {
-    if (!toastMessage) return;
-    const id = window.setTimeout(() => setToastMessage(null), 3000);
-    return () => window.clearTimeout(id);
-  }, [toastMessage]);
-
-  const handleAssemble = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await axios.post<PromptDTO>('/api/assemble', slots);
-      const promptData = response.data;
-      promptData.params = {
-        ...promptData.params,
-        size: apiSize,
-        quality: apiQuality,
-      };
-      setAssembledPrompt(promptData);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to assemble prompt.');
-    } finally {
-      setIsLoading(false);
-    }
+  const handleBriefChange = (changes: Partial<BriefValues>) => {
+    setBrief((prev) => ({ ...prev, ...changes }));
   };
 
-  const handleGenerate = async () => {
-    if (!assembledPrompt) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      await axios.post('/api/image', { prompt: assembledPrompt, n: numImages });
-      await fetchGalleryImages();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to generate image.');
-    } finally {
-      setIsLoading(false);
-    }
+  const ensureImagesArray = useCallback(
+    (promptCount: number) => Array.from({ length: promptCount }, (_, idx) => images?.[idx] ?? []),
+    [images],
+  );
+
+  const applyPipelineResponse = useCallback(
+    (response: GenerateResponse, mode: GenerateMode, promptIndex?: number, appendImages?: boolean) => {
+      if (mode === 'research_only') {
+        setResearch(response.research);
+        setSynthesis(null);
+        setImages(null);
+        setMessage('Research refreshed.');
+        return;
+      }
+
+      if (mode === 'synthesis_only') {
+        if (response.research) {
+          setResearch(response.research);
+        }
+        setSynthesis(response.synthesis);
+        setImages(null);
+        setMessage('Synthesis ready.');
+        return;
+      }
+
+      if (mode === 'images_only') {
+        if (!synthesis && response.synthesis) {
+          setSynthesis(response.synthesis);
+        }
+        if (!synthesis && !response.synthesis) {
+          return;
+        }
+        const effectivePrompts = response.synthesis?.prompts ?? synthesis?.prompts ?? [];
+        const updated = ensureImagesArray(effectivePrompts.length);
+        const newImages = response.images?.[0] ?? [];
+        if (typeof promptIndex === 'number') {
+          updated[promptIndex] = appendImages ? [...updated[promptIndex], ...newImages] : newImages;
+        }
+        setImages(updated);
+        setMessage('Images generated.');
+        return;
+      }
+
+      setResearch(response.research);
+      setSynthesis(response.synthesis);
+      setImages(response.images);
+      setMessage('Full pipeline complete.');
+    },
+    [ensureImagesArray, synthesis],
+  );
+
+  const handlePipeline = useCallback(
+    async (mode: GenerateMode, promptIndex?: number, appendImages?: boolean) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const payload: GenerateRequest = {
+          topic: brief.topic,
+          audience: brief.audience,
+          age: brief.age,
+          depth: brief.depth,
+          variants: brief.variants,
+          images_per_prompt: brief.imagesPerPrompt,
+          mode,
+        };
+
+        if (['synthesis_only', 'images_only', 'full'].includes(mode) && research) {
+          payload.research = research;
+        }
+        if (mode === 'images_only') {
+          if (synthesis) {
+            payload.synthesis = synthesis;
+          }
+          if (typeof promptIndex === 'number') {
+            payload.selected_prompt_index = promptIndex;
+          } else {
+            throw new Error('Select a prompt before requesting images.');
+          }
+        }
+
+        const response = await generatePipeline(payload);
+        applyPipelineResponse(response, mode, promptIndex, appendImages);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unexpected error';
+        setError(message);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [applyPipelineResponse, brief, research, synthesis],
+  );
+
+  const handlePromptChange = (index: number, prompt: SynthPrompt) => {
+    setSynthesis((prev) => {
+      if (!prev) return prev;
+      const updated = [...prev.prompts];
+      updated[index] = prompt;
+      return { prompts: updated };
+    });
   };
 
-  const handleSavePreset = async () => {
-    if (!newPresetName.trim()) {
-      setError('Please enter a name for the preset.');
+  const handleCopyPrompt = async (index: number) => {
+    const prompt = synthesis?.prompts[index];
+    if (!prompt) return;
+    const text = `${prompt.title ? `${prompt.title}\n` : ''}${prompt.positive}\n\nNegative: ${prompt.negative.join(', ')}`;
+    await navigator.clipboard.writeText(text);
+    setMessage('Prompt copied to clipboard.');
+  };
+
+  const handleSavePrompt = (index: number) => {
+    const prompt = synthesis?.prompts[index];
+    if (!prompt) return;
+    const key = `imdai_prompt_${index}`;
+    window.localStorage.setItem(key, JSON.stringify(prompt));
+    setMessage('Prompt saved locally.');
+  };
+
+  const handleDownloadImage = (promptIndex: number, imageIndex: number) => {
+    const image = images?.[promptIndex]?.[imageIndex];
+    if (!image) return;
+    const filename = `imdai_prompt${promptIndex + 1}_image${imageIndex + 1}.png`;
+    const link = document.createElement('a');
+    if (image.url) {
+      link.href = image.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.click();
       return;
     }
-    setError(null);
-    setIsLoading(true);
-    try {
-      await axios.post('/api/presets', { name: newPresetName, slots });
-      setNewPresetName('');
-      await fetchPresets();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to save preset.');
-    } finally {
-      setIsLoading(false);
+    if (image.b64_json) {
+      link.href = `data:image/png;base64,${image.b64_json}`;
+      link.download = filename;
+      link.click();
     }
   };
 
-  const handleInputChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = event.target;
-    setSlots((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const loadPreset = (presetName: string) => {
-    if (presets[presetName]) {
-      setSlots(presets[presetName]);
-    }
-  };
+  const synthesisPrompts = useMemo(() => synthesis?.prompts ?? [], [synthesis]);
 
   return (
-    <div className="app-container">
-      <aside className="controls">
-        <div className="controls-header">
-          <h1>Prompt Engineer</h1>
-          <button onClick={() => setShowSettings(true)}>⚙️</button>
+    <div className="app-shell">
+      <header className="app-header">
+        <div>
+          <h1>IMDAI Image Prompt Lab</h1>
+          <p>Research → Synthesis → Images in a single streamlined flow.</p>
         </div>
+        {(message || error) && <div className={`toast ${error ? 'error' : 'success'}`}>{error ?? message}</div>}
+      </header>
 
-        <div className="form-group">
-          <label>Load Preset</label>
-          <select onChange={(event) => loadPreset(event.target.value)} defaultValue="">
-            <option value="" disabled>
-              -- Select a Preset --
-            </option>
-            {Object.keys(presets).map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label>Save Current as Preset</label>
-          <div className="preset-save">
-            <input
-              type="text"
-              placeholder="New preset name..."
-              value={newPresetName}
-              onChange={(event) => setNewPresetName(event.target.value)}
-            />
-            <button onClick={handleSavePreset} disabled={isLoading}>
-              Save
-            </button>
-          </div>
-        </div>
-
-        {Object.keys(slots).map((key) => (
-          <div className="form-group" key={key}>
-            <label htmlFor={key}>{key.charAt(0).toUpperCase() + key.slice(1)}</label>
-            <input
-              type="text"
-              id={key}
-              name={key}
-              value={slots[key as keyof Slots]}
-              onChange={handleInputChange}
-            />
-          </div>
-        ))}
-
-        <ColorPicker />
-
-        <button onClick={handleAssemble} disabled={isLoading}>
-          {isLoading ? 'Assembling...' : 'Assemble Prompt'}
-        </button>
-
-        <hr />
-
-        <h3>Assembled Prompt</h3>
-        <div className="prompt-display">
-          {assembledPrompt ? JSON.stringify(assembledPrompt, null, 2) : 'Click "Assemble" to generate a prompt.'}
-        </div>
-
-        <div className="api-controls-grid">
-          <div className="form-group">
-            <label htmlFor="apiQuality">Quality</label>
-            <select
-              id="apiQuality"
-              value={apiQuality}
-              onChange={(event) => setApiQuality(event.target.value as ApiQuality)}
-              disabled={isLoading}
-            >
-              <option value="low">Low</option>
-              <option value="high">High</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label htmlFor="apiSize">Size</label>
-            <select
-              id="apiSize"
-              value={apiSize}
-              onChange={(event) => setApiSize(event.target.value as ApiSize)}
-              disabled={isLoading}
-            >
-              <option value="1536x1024">1536x1024</option>
-              <option value="1024x1024">1024x1024</option>
-              <option value="1024x1792">1024x1792</option>
-              <option value="1792x1024">1792x1024</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="numImages">Number of Images</label>
-          <input
-            type="number"
-            id="numImages"
-            min={1}
-            max={4}
-            value={numImages}
-            onChange={(event) => setNumImages(Number(event.target.value))}
-          />
-        </div>
-
-        <button onClick={handleGenerate} disabled={isLoading || !assembledPrompt}>
-          {isLoading ? 'Generating...' : 'Generate Images'}
-        </button>
-        {error && <div className="error-text">{error}</div>}
-      </aside>
-
-      <main className="gallery">
-        <h2>Gallery</h2>
-        <div className="gallery-grid">
-          {galleryImages.map((image) => (
-            <GalleryItem key={image.image_path} image={image} />
-          ))}
-        </div>
-      </main>
-
-      <aside className="processing traits-sidebar">
-        <AutofillPanel onShowToast={setToastMessage} refreshGallery={fetchGalleryImages} />
-      </aside>
-
-      {toastMessage && <div className="toast">{toastMessage}</div>}
-
-      {showSettings && (
-        <SettingsModal
-          onClose={() => setShowSettings(false)}
-          onApiKeyUpdate={handleApiKeyUpdate}
+      <main className="app-main">
+        <BriefCard values={brief} onChange={handleBriefChange} onSubmit={(mode) => handlePipeline(mode)} isLoading={isLoading} />
+        <ResearchBoard research={research} />
+        <PromptTabs
+          synthesis={synthesis}
+          imagesPerPrompt={brief.imagesPerPrompt}
+          onPromptChange={handlePromptChange}
+          onGenerateImages={(index, append) => handlePipeline('images_only', index, append)}
+          onCopyPrompt={handleCopyPrompt}
+          onSavePrompt={handleSavePrompt}
+          isLoading={isLoading}
         />
-      )}
+        <GalleryGrid
+          images={images}
+          prompts={synthesisPrompts}
+          onGenerateImages={(index, append) => handlePipeline('images_only', index, append)}
+          onCopyPrompt={handleCopyPrompt}
+          onDownloadImage={handleDownloadImage}
+          isLoading={isLoading}
+        />
+      </main>
     </div>
   );
 }
