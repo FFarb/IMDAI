@@ -62,13 +62,18 @@ class OpenAIResponsesProvider:
         tools = [{"type": "web_search"}] if use_web else []
         payload: Dict[str, Any] = {
             "model": self.model,
-            "modalities": ["text"],
             "input": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
+                {
+                    "role": "system",
+                    "content": [{"type": "text", "text": system_prompt}],
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": user_prompt}],
+                },
             ],
             "text": {
-                "format": "json_schema",
+                "type": "json_schema",
                 "json_schema": {
                     "name": "autofill_schema",
                     "strict": True,
