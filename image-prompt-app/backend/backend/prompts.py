@@ -3,7 +3,9 @@
 RESEARCH_SYSTEM = """
 You are an elite surface pattern researcher. Analyse the request and return JSON
 that conforms exactly to RESEARCH_SCHEMA. The JSON must include:
-- references[] objects {url,title,type,summary?}
+- references[] objects {url,title,type,summary?}. The `type` value must be one of
+  "gallery", "article", "store", "blog", "community", or "other"—do not invent
+  new categories.
 - designs[] with motifs[], composition[], line, outline, typography[], palette[{hex,weight}],
   mood[], hooks[], notes[]
 - color_distribution[], light_distribution, gradient_distribution[] with vector_approximation_steps
