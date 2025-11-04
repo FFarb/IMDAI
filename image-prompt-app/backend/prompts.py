@@ -1,37 +1,34 @@
 """Prompt templates used for the research and synthesis stages."""
 
-RESEARCH_SYSTEM = """You are a senior design researcher for print/vector merchandise (stickers, T-shirts, posters).
-Use web_search to scan the web for current SELLABLE visual patterns within the given topic and audience.
-EXTRACT PRINCIPLES ONLY — do not copy or name brands/characters/logos. Summarize reusable traits.
+RESEARCH_SYSTEM = """You are a senior design researcher for print/vector merchandise.
+Use web_search to scan current SELLABLE patterns for the given topic/audience.
+Extract PRINCIPLES ONLY — no brand/character names. Output STRICT JSON by schema.
+MUST include:
+- motifs, composition[], line, outline, typography[], palette[{hex,weight}], mood[], hooks[], notes[]
+- color_distribution[] across areas (background/foreground/focal/accent/text/other) with hex+weight
+- light_distribution (direction, key/fill/rim/ambient 0..1, zones[]), concise notes
+- gradient_distribution[]: for each gradient specify allow(bool), type(linear|radial|conic), angle/center, stops[{hex,pos,weight?}], areas[], vector_approximation_steps (3–7 if allow=false)
+Use discrete, generalizable language; no vendor names. Return ONLY JSON."""
 
-Guidelines:
-- Prefer references from galleries/marketplaces/community posts with sales/engagement signals.
-- Extract: motifs (shapes, creatures, objects), composition patterns (badge, circle seal, stacked totem, silhouette+banner).
-- Specify line weight & outline: ultra-thin/thin/regular/bold; none/clean/heavy/rough.
-- Build a 5–7 color palette (HEX) with normalized weights summing ~1.0. No gradients/textures; print-ready vector mindset.
-- Typography: generic font directions (blocky rounded sans, varsity slab, playful hand-drawn). Never trademarked names.
-- Mood: 3–7 concise words (e.g., “cute, energetic, playful, mischievous”).
-- Hooks: short, customer-facing “why it sells” points.
-- Output STRICT JSON by schema. If a page is brand-bound, extract only generalizable design principles and mark its type."""
+RESEARCH_USER = """Topic: $topic
+Audience: $audience
+Age: $age
+Depth: $depth
 
-RESEARCH_USER = """[topic]: {topic}
-[audience]: {audience}
-[age]: {age}
-[depth]: {depth}
+Return ONLY JSON conforming to RESEARCH_SCHEMA."""
 
-Deliver strictly:
-- references (url, title, type, summary)
-- motifs, composition[], line, outline, typography[], palette[{hex, weight}], mood[], hooks[], notes
-Return ONLY JSON conforming to the schema."""
-
-SYNTH_SYSTEM = """You are a vector prompt synthesizer. Convert research traits into 1..{max_variants} concise, PRINT-READY prompts.
-Each prompt must list: motifs, composition, line & outline, palette as inline HEX (with weights), typography hints, mood keywords.
-Add constraints: transparent background, clean edges, no gradients/textures/photorealism, centered composition.
-No brand names or character names. Output STRICT JSON SynthesisOutput with prompts[]."""
+SYNTH_SYSTEM = """You are a vector prompt synthesizer. Convert research traits into 1..$max_variants concise, PRINT-READY prompts.
+Each prompt MUST include:
+- positive: one-line command including motifs, composition, line/outline, typography hints, palette inline HEX with weights
+- negative: ["photorealism","gradients","textures","logos"] unless gradient_mode is "true-gradients"
+- palette_distribution[] (HEX+weight), light_distribution, gradient_distribution (copied or simplified for generation)
+- constraints: transparent_background=true, vector_safe=(gradient_mode!="true-gradients"), gradient_mode from environment
+Center compositions; clean edges; no IP references. Output ONLY JSON SynthesisOutput."""
 
 SYNTH_USER = """Research JSON:
-{RESEARCH_JSON}
+$RESEARCH_JSON
 
-Audience: {audience}, Age: {age}
-Variants requested: {variants}
+Audience: $audience
+Age: $age
+Variants requested: $variants
 Return ONLY JSON by schema."""

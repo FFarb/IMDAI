@@ -1,174 +1,199 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useState } from 'react';
+import usePipelineStore from '../store/pipeline';
+import type { BriefValues } from './BriefCard';
+import { ResearchBoard } from './ResearchBoard';
+import { GalleryGrid } from './GalleryGrid';
+import { SynthesisPrompt } from '../types/pipeline';
 
-import type { SynthPrompt, SynthesisOutput } from '../types/pipeline';
-
-interface PromptTabsProps {
-  synthesis: SynthesisOutput | null;
-  imagesPerPrompt: number;
-  onPromptChange: (index: number, prompt: SynthPrompt) => void;
-  onGenerateImages: (index: number, append?: boolean) => void;
-  onCopyPrompt: (index: number) => void;
-  onSavePrompt: (index: number) => void;
-  isLoading: boolean;
+// API call functions (could be moved to a dedicated api.ts file)
+async function runResearch(brief: BriefValues) {
+  const response = await fetch('/api/research', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      topic: brief.topic,
+      audience: brief.audience,
+      age: brief.age,
+      depth: brief.depth,
+    }),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Research request failed');
+  }
+  return response.json();
 }
 
-export function PromptTabs({
-  synthesis,
-  imagesPerPrompt,
-  onPromptChange,
-  onGenerateImages,
-  onCopyPrompt,
-  onSavePrompt,
-  isLoading,
-}: PromptTabsProps) {
-  const prompts = synthesis?.prompts ?? [];
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [newNegative, setNewNegative] = useState('');
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [prompts.length]);
-
-  useEffect(() => {
-    setNewNegative('');
-  }, [activeIndex]);
-
-  const activePrompt = useMemo(() => prompts[activeIndex], [prompts, activeIndex]);
-
-  if (!prompts.length) {
-    return (
-      <section className="card">
-        <header className="card-header">
-          <div>
-            <h2>Assembled Prompts</h2>
-            <p className="card-subtitle">Synthesise prompts to edit and generate images.</p>
-          </div>
-        </header>
-        <p className="muted">No prompts yet. Run synthesis to begin.</p>
-      </section>
-    );
+async function runSynthesis(brief: BriefValues, researchData: any) {
+  const response = await fetch('/api/synthesize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      research: researchData,
+      audience: brief.audience,
+      age: brief.age,
+      variants: brief.variants,
+    }),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Synthesis request failed');
   }
+  return response.json();
+}
 
-  const updatePrompt = (changes: Partial<SynthPrompt>) => {
-    if (!activePrompt) return;
-    onPromptChange(activeIndex, { ...activePrompt, ...changes });
+async function runImageGeneration(prompt: SynthesisPrompt, count: number) {
+  const response = await fetch('/api/images', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt_positive: prompt.positive,
+      prompt_negative: prompt.negative,
+      n: count,
+    }),
+  });
+   if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Image generation failed');
+  }
+  return response.json();
+}
+
+
+interface PromptTabsProps {
+  brief: BriefValues;
+  isBriefLoading: boolean;
+}
+
+type TabName = 'research' | 'synthesis' | 'images';
+
+export function PromptTabs({ brief, isBriefLoading }: PromptTabsProps) {
+  const [activeTab, setActiveTab] = useState<TabName>('research');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const { research, synthesis, images, setResearch, setSynthesis, setImages } = usePipelineStore();
+  const [selectedPromptIndex, setSelectedPromptIndex] = useState(0);
+
+  const handleRunResearch = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await runResearch(brief);
+      setResearch(result);
+      setActiveTab('synthesis'); // Move to next tab on success
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleFieldChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = event.target;
-    if (name === 'title') {
-      updatePrompt({ title: value });
-    }
-    if (name === 'positive') {
-      updatePrompt({ positive: value });
-    }
-    if (name === 'notes') {
-      updatePrompt({ notes: value });
+  const handleSynthesize = async () => {
+    if (!research) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await runSynthesis(brief, research);
+      setSynthesis(result);
+      setActiveTab('images'); // Move to next tab
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleAddNegative = (event: FormEvent) => {
-    event.preventDefault();
-    const value = newNegative.trim();
-    if (!value || !activePrompt) return;
-    if (activePrompt.negative.includes(value)) {
-      setNewNegative('');
-      return;
+  const handleGenerate = async () => {
+    if (!synthesis || !synthesis.prompts[selectedPromptIndex]) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const prompt = synthesis.prompts[selectedPromptIndex];
+      const result = await runImageGeneration(prompt, brief.imagesPerPrompt);
+      // Assuming result.images is an array of {url} or {b64_json}
+      const imageUrls = result.images.map((img: any) => img.url || `data:image/jpeg;base64,${img.b64_json}`);
+      const newImages = [...images];
+      newImages[selectedPromptIndex] = imageUrls;
+      setImages(newImages);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
-    updatePrompt({ negative: [...activePrompt.negative, value] });
-    setNewNegative('');
   };
 
-  const handleRemoveNegative = (index: number) => {
-    if (!activePrompt) return;
-    const updated = activePrompt.negative.filter((_, idx) => idx !== index);
-    updatePrompt({ negative: updated });
-  };
-
-  const tabLabel = (idx: number) => String.fromCharCode(65 + idx);
+  const TABS: { id: TabName; label: string }[] = [
+    { id: 'research', label: '1. Research' },
+    { id: 'synthesis', label: '2. Prompt Builder' },
+    { id: 'images', label: '3. Image Generation' },
+  ];
 
   return (
     <section className="card">
-      <header className="card-header">
-        <div>
-          <h2>Assembled Prompts</h2>
-          <p className="card-subtitle">Fine-tune before sending to the Images stage.</p>
-        </div>
-      </header>
-
       <div className="tab-row">
-        {prompts.map((prompt, idx) => (
+        {TABS.map((tab) => (
           <button
-            key={idx}
+            key={tab.id}
             type="button"
-            className={`tab ${idx === activeIndex ? 'active' : ''}`}
-            onClick={() => setActiveIndex(idx)}
+            className={`tab ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+            disabled={isLoading}
           >
-            {tabLabel(idx)}
-            {prompt.title ? ` · ${prompt.title}` : ''}
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {activePrompt ? (
-        <div className="prompt-editor">
-          <label className="field">
-            <span>Prompt title</span>
-            <input name="title" value={activePrompt.title ?? ''} onChange={handleFieldChange} placeholder="Optional label" />
-          </label>
+      {error && <div className="error-box">{error}</div>}
 
-          <label className="field">
-            <span>Positive prompt</span>
-            <textarea
-              name="positive"
-              rows={6}
-              value={activePrompt.positive}
-              onChange={handleFieldChange}
-            />
-          </label>
-
-          <div className="field">
-            <span>Negative tags</span>
-            <div className="pill-row">
-              {activePrompt.negative.map((item, idx) => (
-                <span className="pill removable" key={`${item}-${idx}`}>
-                  {item}
-                  <button type="button" onClick={() => handleRemoveNegative(idx)} aria-label={`Remove ${item}`}>
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-            <form className="inline-form" onSubmit={handleAddNegative}>
-              <input
-                value={newNegative}
-                onChange={(event) => setNewNegative(event.target.value)}
-                placeholder="Add negative tag"
-              />
-              <button type="submit" disabled={!newNegative.trim()}>
-                Add
+      <div className="tab-content">
+        {activeTab === 'research' && (
+          <div>
+            <div className="card-actions">
+              <button onClick={handleRunResearch} disabled={isLoading || isBriefLoading || !brief.topic.trim()} className="primary">
+                {isLoading ? 'Researching...' : 'Run Research'}
               </button>
-            </form>
+            </div>
+            {research && <ResearchBoard research={research} />}
           </div>
+        )}
 
-          <label className="field">
-            <span>Notes</span>
-            <textarea name="notes" rows={3} value={activePrompt.notes ?? ''} onChange={handleFieldChange} />
-          </label>
-
-          <div className="card-actions">
-            <button type="button" onClick={() => onGenerateImages(activeIndex, false)} disabled={isLoading} className="primary">
-              Generate Images ({imagesPerPrompt})
-            </button>
-            <button type="button" onClick={() => onCopyPrompt(activeIndex)} disabled={isLoading}>
-              Copy Prompt
-            </button>
-            <button type="button" onClick={() => onSavePrompt(activeIndex)} disabled={isLoading}>
-              Save Prompt
-            </button>
+        {activeTab === 'synthesis' && (
+          <div>
+            <div className="card-actions">
+               <button onClick={handleSynthesize} disabled={isLoading || !research} className="primary">
+                {isLoading ? 'Synthesizing...' : 'Synthesize Prompts'}
+              </button>
+            </div>
+            {research && <textarea readOnly value={JSON.stringify(research, null, 2)} rows={10} style={{ width: '100%', resize: 'vertical' }} />}
+            {synthesis && (
+              <div>
+                <h3>Synthesized Prompts:</h3>
+                <ul>
+                  {synthesis.prompts.map((p, i) => <li key={i}><strong>{p.title || `Prompt ${i+1}`}:</strong> {p.positive}</li>)}
+                </ul>
+              </div>
+            )}
           </div>
-        </div>
-      ) : null}
+        )}
+
+        {activeTab === 'images' && (
+          <div>
+            <div className="card-actions">
+               <button onClick={handleGenerate} disabled={isLoading || !synthesis?.prompts.length} className="primary">
+                 {isLoading ? 'Generating...' : `Generate Images (${brief.imagesPerPrompt})`}
+              </button>
+            </div>
+             {synthesis && synthesis.prompts.length > 0 && (
+              <select value={selectedPromptIndex} onChange={(e) => setSelectedPromptIndex(Number(e.target.value))} disabled={isLoading}>
+                {synthesis.prompts.map((p, i) => <option key={i} value={i}>{p.title || `Prompt ${i+1}`}</option>)}
+              </select>
+            )}
+            <GalleryGrid images={images} />
+          </div>
+        )}
+      </div>
     </section>
   );
 }
