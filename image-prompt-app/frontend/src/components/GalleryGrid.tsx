@@ -1,32 +1,32 @@
-import type { ImageResult, SynthPrompt } from '../types/pipeline';
+import type { ImageResult, SynthesisPrompt } from '../types/pipeline';
 
 interface GalleryGridProps {
-  images: ImageResult[][] | null;
-  prompts: SynthPrompt[] | null;
-  onGenerateImages: (index: number, append?: boolean) => void;
-  onCopyPrompt: (index: number) => void;
-  onDownloadImage: (promptIndex: number, imageIndex: number) => void;
+  prompts: SynthesisPrompt[] | null;
+  images: ImageResult[][];
   isLoading: boolean;
 }
 
-export function GalleryGrid({
-  images,
-  prompts,
-  onGenerateImages,
-  onCopyPrompt,
-  onDownloadImage,
-  isLoading,
-}: GalleryGridProps) {
-  if (!images || !prompts || !prompts.length) {
+function resolveImageSource(image: ImageResult): string | null {
+  if (image.url) {
+    return image.url;
+  }
+  if (image.b64_json) {
+    return `data:image/png;base64,${image.b64_json}`;
+  }
+  return null;
+}
+
+export function GalleryGrid({ prompts, images, isLoading }: GalleryGridProps) {
+  if (!prompts?.length) {
     return (
       <section className="card">
         <header className="card-header">
           <div>
             <h2>Gallery</h2>
-            <p className="card-subtitle">Generate images to see results here.</p>
+            <p className="card-subtitle">Generate prompts to review image outputs.</p>
           </div>
         </header>
-        <p className="muted">No images yet.</p>
+        <p className="muted">No prompts available yet.</p>
       </section>
     );
   }
@@ -36,7 +36,7 @@ export function GalleryGrid({
       <header className="card-header">
         <div>
           <h2>Gallery</h2>
-          <p className="card-subtitle">Review outputs, request variations, and export assets.</p>
+          <p className="card-subtitle">Review generated prompts and their image variations.</p>
         </div>
       </header>
 
@@ -44,50 +44,49 @@ export function GalleryGrid({
         {prompts.map((prompt, promptIndex) => {
           const promptImages = images[promptIndex] ?? [];
           return (
-            <div className="gallery-column" key={`prompt-${promptIndex}`}>
-              <div className="gallery-header">
-                <h3>
-                  Prompt {String.fromCharCode(65 + promptIndex)}
-                  {prompt.title ? ` · ${prompt.title}` : ''}
-                </h3>
-                <div className="card-actions">
-                  <button type="button" onClick={() => onGenerateImages(promptIndex, true)} disabled={isLoading}>
-                    Variations
-                  </button>
-                  <button type="button" onClick={() => onGenerateImages(promptIndex, false)} disabled={isLoading}>
-                    Regenerate
-                  </button>
-                  <button type="button" onClick={() => onCopyPrompt(promptIndex)} disabled={isLoading}>
-                    Copy Prompt
-                  </button>
-                </div>
-              </div>
+            <article className="gallery-column" key={`prompt-${promptIndex}`}>
+              <header className="gallery-header">
+                <h3>Prompt {promptIndex + 1}</h3>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={isLoading}
+                  onClick={() => {
+                    void navigator.clipboard?.writeText?.(prompt.positive);
+                  }}
+                >
+                  Copy Prompt
+                </button>
+              </header>
+
+              <pre className="prompt-text">{prompt.positive}</pre>
+              {prompt.negative.length ? (
+                <p className="muted">Negative: {prompt.negative.join(', ')}</p>
+              ) : null}
+              {prompt.notes ? <p className="muted">Notes: {prompt.notes}</p> : null}
 
               <div className="image-stack">
                 {promptImages.length ? (
                   promptImages.map((image, imageIndex) => {
-                    const src = image.url ?? (image.b64_json ? `data:image/png;base64,${image.b64_json}` : null);
-                    if (!src) return null;
+                    const src = resolveImageSource(image);
+                    if (!src) {
+                      return (
+                        <p className="muted" key={`image-${promptIndex}-${imageIndex}`}>
+                          No preview available.
+                        </p>
+                      );
+                    }
                     return (
-                      <figure key={`${promptIndex}-${imageIndex}`} className="image-card">
+                      <figure className="image-card" key={`image-${promptIndex}-${imageIndex}`}>
                         <img src={src} alt={`Prompt ${promptIndex + 1} result ${imageIndex + 1}`} />
-                        <figcaption>
-                          <button
-                            type="button"
-                            onClick={() => onDownloadImage(promptIndex, imageIndex)}
-                            disabled={isLoading}
-                          >
-                            Download
-                          </button>
-                        </figcaption>
                       </figure>
                     );
                   })
                 ) : (
-                  <p className="muted">No images yet for this prompt.</p>
+                  <p className="muted">Generate images to see results here.</p>
                 )}
               </div>
-            </div>
+            </article>
           );
         })}
       </div>

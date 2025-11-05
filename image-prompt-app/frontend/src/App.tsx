@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import usePipelineStore from './store/pipeline';
 import { BriefCard, type BriefValues } from './components/BriefCard';
 import { PromptTabs } from './components/PromptTabs';
+import type { ImageResult, ResearchOutput, SynthesisOutput } from './types/pipeline';
 
-// Set the initial state for the brief
 const defaultBrief: BriefValues = {
   topic: 'Friendly dinosaurs for classroom posters',
   audience: 'Elementary school children',
@@ -14,20 +13,25 @@ const defaultBrief: BriefValues = {
 };
 
 function App() {
-  // The brief's state is managed locally in the App component
   const [brief, setBrief] = useState<BriefValues>(defaultBrief);
-  const [isBriefLoading, setIsBriefLoading] = useState(false);
-
-  // All other pipeline state is now managed by the Zustand store
-  const { clearState } = usePipelineStore();
+  const [isBriefLoading] = useState(false);
+  const [research, setResearch] = useState<ResearchOutput | null>(null);
+  const [synthesis, setSynthesis] = useState<SynthesisOutput | null>(null);
+  const [images, setImages] = useState<ImageResult[][]>([]);
 
   const handleBriefChange = (changes: Partial<BriefValues>) => {
     setBrief((prev) => ({ ...prev, ...changes }));
   };
 
+  const resetPipelineState = () => {
+    setResearch(null);
+    setSynthesis(null);
+    setImages([]);
+  };
+
   const handleReset = () => {
     setBrief(defaultBrief);
-    clearState();
+    resetPipelineState();
   };
 
   return (
@@ -41,16 +45,18 @@ function App() {
       </header>
 
       <main className="app-main">
-        <BriefCard
-          values={brief}
-          onChange={handleBriefChange}
-          isLoading={isBriefLoading}
-        />
+        <BriefCard values={brief} onChange={handleBriefChange} isLoading={isBriefLoading} />
 
-        {/* The PromptTabs component now orchestrates the entire pipeline UI */}
         <PromptTabs
           brief={brief}
           isBriefLoading={isBriefLoading}
+          research={research}
+          synthesis={synthesis}
+          images={images}
+          setResearch={setResearch}
+          setSynthesis={setSynthesis}
+          setImages={setImages}
+          onClearPipeline={resetPipelineState}
         />
       </main>
     </div>

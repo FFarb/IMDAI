@@ -1,79 +1,91 @@
 import { useState } from 'react';
-import usePipelineStore from '../store/pipeline';
 import type { BriefValues } from './BriefCard';
 import { ResearchBoard } from './ResearchBoard';
 import { GalleryGrid } from './GalleryGrid';
-import { SynthesisPrompt } from '../types/pipeline';
+import type { ImageResult, ResearchOutput, SynthesisOutput, SynthesisPrompt } from '../types/pipeline';
 
-// API call functions (could be moved to a dedicated api.ts file)
-async function runResearch(brief: BriefValues) {
-  const response = await fetch('/api/research', {
+async function postJson<T>(url: string, payload: unknown): Promise<T> {
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      topic: brief.topic,
-      audience: brief.audience,
-      age: brief.age,
-      depth: brief.depth,
-    }),
+    body: JSON.stringify(payload),
   });
+
+  const data = await response.json().catch(() => null);
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Research request failed');
+    const detail = typeof data?.detail === 'string' ? data.detail : 'Request failed';
+    throw new Error(detail);
   }
-  return response.json();
+  return data as T;
 }
 
-async function runSynthesis(brief: BriefValues, researchData: any) {
-  const response = await fetch('/api/synthesize', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      research: researchData,
-      audience: brief.audience,
-      age: brief.age,
-      variants: brief.variants,
-    }),
+async function runResearch(brief: BriefValues): Promise<ResearchOutput> {
+  return postJson<ResearchOutput>('/api/research', {
+    topic: brief.topic,
+    audience: brief.audience,
+    age: brief.age,
+    depth: brief.depth,
   });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Synthesis request failed');
-  }
-  return response.json();
 }
 
-async function runImageGeneration(prompt: SynthesisPrompt, count: number) {
-  const response = await fetch('/api/images', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt_positive: prompt.positive,
-      prompt_negative: prompt.negative,
-      n: count,
-    }),
+async function runSynthesis(brief: BriefValues, research: ResearchOutput): Promise<SynthesisOutput> {
+  return postJson<SynthesisOutput>('/api/synthesize', {
+    research_text: research.analysis,
+    audience: brief.audience,
+    age: brief.age,
+    variants: brief.variants,
   });
-   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Image generation failed');
-  }
-  return response.json();
 }
 
+async function runImageGeneration(prompt: SynthesisPrompt, count: number): Promise<ImageResult[]> {
+  const payload = await postJson<{ data: ImageResult[] }>('/api/images', {
+    prompt_positive: prompt.positive,
+    prompt_negative: prompt.negative,
+    n: count,
+  });
+  return payload.data;
+}
 
 interface PromptTabsProps {
   brief: BriefValues;
   isBriefLoading: boolean;
+  research: ResearchOutput | null;
+  synthesis: SynthesisOutput | null;
+  images: ImageResult[][];
+  setResearch: (research: ResearchOutput | null) => void;
+  setSynthesis: (synthesis: SynthesisOutput | null) => void;
+  setImages: (images: ImageResult[][]) => void;
+  onClearPipeline: () => void;
 }
 
 type TabName = 'research' | 'synthesis' | 'images';
 
-export function PromptTabs({ brief, isBriefLoading }: PromptTabsProps) {
+const TABS: { id: TabName; label: string }[] = [
+  { id: 'research', label: '1. Research' },
+  { id: 'synthesis', label: '2. Prompt Builder' },
+  { id: 'images', label: '3. Image Generation' },
+];
+
+export function PromptTabs({
+  brief,
+  isBriefLoading,
+  research,
+  synthesis,
+  images,
+  setResearch,
+  setSynthesis,
+  setImages,
+  onClearPipeline,
+}: PromptTabsProps) {
   const [activeTab, setActiveTab] = useState<TabName>('research');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const { research, synthesis, images, setResearch, setSynthesis, setImages } = usePipelineStore();
   const [selectedPromptIndex, setSelectedPromptIndex] = useState(0);
+
+  const handleResetPipeline = () => {
+    onClearPipeline();
+    setSelectedPromptIndex(0);
+  };
 
   const handleRunResearch = async () => {
     setIsLoading(true);
@@ -81,53 +93,58 @@ export function PromptTabs({ brief, isBriefLoading }: PromptTabsProps) {
     try {
       const result = await runResearch(brief);
       setResearch(result);
-      setActiveTab('synthesis'); // Move to next tab on success
-    } catch (err: any) {
-      setError(err.message);
+      setSynthesis(null);
+      setImages([]);
+      setSelectedPromptIndex(0);
+      setActiveTab('synthesis');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to run research');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSynthesize = async () => {
-    if (!research) return;
+    if (!research) {
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
       const result = await runSynthesis(brief, research);
       setSynthesis(result);
-      setActiveTab('images'); // Move to next tab
-    } catch (err: any) {
-      setError(err.message);
+      setImages([]);
+      setSelectedPromptIndex(0);
+      setActiveTab('images');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to synthesize prompts');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGenerate = async () => {
-    if (!synthesis || !synthesis.prompts[selectedPromptIndex]) return;
+  const handleGenerateImages = async () => {
+    if (!synthesis?.prompts.length) {
+      return;
+    }
+    const prompt = synthesis.prompts[selectedPromptIndex];
+    if (!prompt) {
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const prompt = synthesis.prompts[selectedPromptIndex];
       const result = await runImageGeneration(prompt, brief.imagesPerPrompt);
-      // Assuming result.images is an array of {url} or {b64_json}
-      const imageUrls = result.images.map((img: any) => img.url || `data:image/jpeg;base64,${img.b64_json}`);
-      const newImages = [...images];
-      newImages[selectedPromptIndex] = imageUrls;
-      setImages(newImages);
-    } catch (err: any) {
-      setError(err.message);
+      const nextImages = images.slice();
+      nextImages[selectedPromptIndex] = result;
+      setImages(nextImages);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to generate images');
     } finally {
       setIsLoading(false);
     }
   };
-
-  const TABS: { id: TabName; label: string }[] = [
-    { id: 'research', label: '1. Research' },
-    { id: 'synthesis', label: '2. Prompt Builder' },
-    { id: 'images', label: '3. Image Generation' },
-  ];
 
   return (
     <section className="card">
@@ -143,54 +160,86 @@ export function PromptTabs({ brief, isBriefLoading }: PromptTabsProps) {
             {tab.label}
           </button>
         ))}
+        <button type="button" className="secondary" onClick={handleResetPipeline} disabled={isLoading}>
+          Clear Results
+        </button>
       </div>
 
-      {error && <div className="error-box">{error}</div>}
+      {error ? <div className="error-box">{error}</div> : null}
 
       <div className="tab-content">
         {activeTab === 'research' && (
           <div>
             <div className="card-actions">
-              <button onClick={handleRunResearch} disabled={isLoading || isBriefLoading || !brief.topic.trim()} className="primary">
-                {isLoading ? 'Researching...' : 'Run Research'}
+              <button
+                type="button"
+                className="primary"
+                onClick={handleRunResearch}
+                disabled={isLoading || isBriefLoading || !brief.topic.trim()}
+              >
+                {isLoading ? 'Researching…' : 'Run Research'}
               </button>
             </div>
-            {research && <ResearchBoard research={research} />}
+            <ResearchBoard research={research} />
           </div>
         )}
 
         {activeTab === 'synthesis' && (
           <div>
             <div className="card-actions">
-               <button onClick={handleSynthesize} disabled={isLoading || !research} className="primary">
-                {isLoading ? 'Synthesizing...' : 'Synthesize Prompts'}
+              <button
+                type="button"
+                className="primary"
+                onClick={handleSynthesize}
+                disabled={isLoading || !research}
+              >
+                {isLoading ? 'Synthesizing…' : 'Synthesize Prompts'}
               </button>
             </div>
-            {research && <textarea readOnly value={JSON.stringify(research, null, 2)} rows={10} style={{ width: '100%', resize: 'vertical' }} />}
-            {synthesis && (
-              <div>
-                <h3>Synthesized Prompts:</h3>
+            <ResearchBoard research={research} />
+            {synthesis ? (
+              <div className="synthesis-preview">
+                <h3>Prompt Variants</h3>
                 <ul>
-                  {synthesis.prompts.map((p, i) => <li key={i}><strong>{p.title || `Prompt ${i+1}`}:</strong> {p.positive}</li>)}
+                  {synthesis.prompts.map((prompt, index) => (
+                    <li key={`prompt-${index}`}>
+                      <strong>{`Prompt ${index + 1}`}:</strong> {prompt.positive}
+                    </li>
+                  ))}
                 </ul>
+                <details className="raw-text-preview">
+                  <summary>View raw prompt text</summary>
+                  <pre>{synthesis.raw_text}</pre>
+                </details>
               </div>
-            )}
+            ) : null}
           </div>
         )}
 
         {activeTab === 'images' && (
           <div>
             <div className="card-actions">
-               <button onClick={handleGenerate} disabled={isLoading || !synthesis?.prompts.length} className="primary">
-                 {isLoading ? 'Generating...' : `Generate Images (${brief.imagesPerPrompt})`}
+              <select
+                value={selectedPromptIndex}
+                onChange={(event) => setSelectedPromptIndex(Number(event.target.value))}
+                disabled={isLoading || !synthesis?.prompts.length}
+              >
+                {synthesis?.prompts.map((_, index) => (
+                  <option key={`prompt-option-${index}`} value={index}>
+                    {`Prompt ${index + 1}`}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="primary"
+                onClick={handleGenerateImages}
+                disabled={isLoading || !synthesis?.prompts.length}
+              >
+                {isLoading ? 'Generating…' : `Generate Images (${brief.imagesPerPrompt})`}
               </button>
             </div>
-             {synthesis && synthesis.prompts.length > 0 && (
-              <select value={selectedPromptIndex} onChange={(e) => setSelectedPromptIndex(Number(e.target.value))} disabled={isLoading}>
-                {synthesis.prompts.map((p, i) => <option key={i} value={i}>{p.title || `Prompt ${i+1}`}</option>)}
-              </select>
-            )}
-            <GalleryGrid images={images} />
+            <GalleryGrid prompts={synthesis?.prompts ?? null} images={images} isLoading={isLoading} />
           </div>
         )}
       </div>
