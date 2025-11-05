@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BriefCard, type BriefValues } from './components/BriefCard';
 import { PromptTabs } from './components/PromptTabs';
 import type { ImageResult, ResearchOutput, SynthesisOutput } from './types/pipeline';
@@ -13,11 +13,39 @@ const defaultBrief: BriefValues = {
 };
 
 function App() {
-  const [brief, setBrief] = useState<BriefValues>(defaultBrief);
+  const [brief, setBrief] = useState<BriefValues>(() => {
+    const saved = localStorage.getItem('brief');
+    return saved ? JSON.parse(saved) : defaultBrief;
+  });
   const [isBriefLoading] = useState(false);
-  const [research, setResearch] = useState<ResearchOutput | null>(null);
-  const [synthesis, setSynthesis] = useState<SynthesisOutput | null>(null);
-  const [images, setImages] = useState<ImageResult[][]>([]);
+  const [research, setResearch] = useState<ResearchOutput | null>(() => {
+    const saved = localStorage.getItem('research');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [synthesis, setSynthesis] = useState<SynthesisOutput | null>(() => {
+    const saved = localStorage.getItem('synthesis');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [images, setImages] = useState<ImageResult[][]>(() => {
+    const saved = localStorage.getItem('images');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('brief', JSON.stringify(brief));
+  }, [brief]);
+
+  useEffect(() => {
+    localStorage.setItem('research', JSON.stringify(research));
+  }, [research]);
+
+  useEffect(() => {
+    localStorage.setItem('synthesis', JSON.stringify(synthesis));
+  }, [synthesis]);
+
+  useEffect(() => {
+    localStorage.setItem('images', JSON.stringify(images));
+  }, [images]);
 
   const handleBriefChange = (changes: Partial<BriefValues>) => {
     setBrief((prev) => ({ ...prev, ...changes }));

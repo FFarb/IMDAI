@@ -69,7 +69,7 @@ def get_images(req: ImageRequest) -> dict[str, Any]:
             model=GPT_IMAGE_MODEL,
             prompt=full_prompt,
             size="1024x1024",
-            quality="standard",
+            quality="auto",
             n=req.n,
         )
     except Exception as exc:  # pragma: no cover - network failure path

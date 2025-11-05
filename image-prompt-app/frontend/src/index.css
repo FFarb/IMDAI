@@ -357,6 +357,11 @@ button.primary {
   gap: 0.6rem;
 }
 
+.prompt-text-wrappable {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .image-stack {
   display: grid;
   gap: 1rem;

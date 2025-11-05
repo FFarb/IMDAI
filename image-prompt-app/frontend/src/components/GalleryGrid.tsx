@@ -59,7 +59,7 @@ export function GalleryGrid({ prompts, images, isLoading }: GalleryGridProps) {
                 </button>
               </header>
 
-              <pre className="prompt-text">{prompt.positive}</pre>
+              <pre className="prompt-text-wrappable">{prompt.positive}</pre>
               {prompt.negative.length ? (
                 <p className="muted">Negative: {prompt.negative.join(', ')}</p>
               ) : null}
