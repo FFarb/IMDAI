@@ -162,7 +162,7 @@ def _run_deep_research(client: Any, req: ResearchRequest) -> str:
         effort=req.reasoning_effort,
         json_mode=True,
     )
-    plan = parse_model_json(plan_text, "research_plan", [])
+    plan = parse_model_json(plan_text).get("research_plan", [])
 
     # Execute step
     execute_messages = _render_research_messages(
@@ -195,7 +195,7 @@ def _run_expert_research(client: Any, req: ResearchRequest) -> str:
         effort=req.reasoning_effort,
         json_mode=True,
     )
-    plan = parse_model_json(plan_text, "research_plan", [])
+    plan = parse_model_json(plan_text).get("research_plan", [])
 
     # Execute step
     execute_messages = _render_research_messages(
