@@ -1,46 +1,47 @@
-"""Prompt templates used across the research and synthesis stages."""
+# flake8: noqa
+"""
+This file contains all the prompts used in the application.
+It is a "scaffolding" file that will be populated by the user.
+"""
 
-RESEARCH_SYSTEM = """
-You are an elite surface pattern researcher. Analyse the request and craft a
-succinct but information-rich briefing as plain text. Structure the response with
-clear headings (e.g. OVERVIEW:, COLOR PALETTE:, LIGHTING:, NEGATIVE GUIDANCE:)
-and bullet lists using '-' or '•' characters. Include:
-• overview of the visual story and intended emotional tone
-• motifs, composition ideas, and illustrative notes
-• palette, lighting, and material guidance
-• risks or elements to avoid for safety/licensing
-Keep the language licensable and avoid JSON or code blocks. Output plain text only.
-""".strip()
+# ==============================================================================
+# RESEARCH PROMPTS
+# ==============================================================================
 
-RESEARCH_USER = """
-Topic: $topic
-Audience: $audience
-Age: $age
-Depth: $depth
+# ------------------------------------------------------------------------------
+# QUICK MODE
+# ------------------------------------------------------------------------------
+RESEARCH_SYSTEM_PROMPT_QUICK = "..."
+RESEARCH_USER_PROMPT_QUICK = "..."
 
-Write a detailed brief following the instructions. Do not output JSON.
-""".strip()
+# ------------------------------------------------------------------------------
+# DEEP MODE (PLAN-AND-EXECUTE)
+# ------------------------------------------------------------------------------
+RESEARCH_SYSTEM_PROMPT_DEEP_PLAN = "..."
+RESEARCH_USER_PROMPT_DEEP_PLAN = "..."
 
-SYNTH_SYSTEM = """
-You convert research briefs into imaginative text-to-image prompts. Produce up to
-$max_variants prompt blocks using the exact template:
+RESEARCH_SYSTEM_PROMPT_DEEP_EXECUTE = "..."
+RESEARCH_USER_PROMPT_DEEP_EXECUTE = "..."
 
-PROMPT 1:
-Positive: <long, evocative description>
-Negative: <comma separated risks to exclude>
-Notes: <optional production notes>
+# ------------------------------------------------------------------------------
+# EXPERT MODE (PLAN-AND-EXECUTE + JUDGE)
+# ------------------------------------------------------------------------------
+RESEARCH_SYSTEM_PROMPT_EXPERT_PLAN = "..."
+RESEARCH_USER_PROMPT_EXPERT_PLAN = "..."
 
-Repeat for each prompt number. Use lavish detail, precise style cues, and clear
-negative terms. Output only these prompt blocks with no extra commentary.
-""".strip()
+RESEARCH_SYSTEM_PROMPT_EXPERT_EXECUTE = "..."
+RESEARCH_USER_PROMPT_EXPERT_EXECUTE = "..."
 
-SYNTH_USER = """
-Research Brief:
-$RESEARCH_TEXT
+RESEARCH_SYSTEM_PROMPT_EXPERT_JUDGE = "..."
+RESEARCH_USER_PROMPT_EXPERT_JUDGE = "..."
 
-Audience: $audience
-Age: $age
-Prompt Variants Requested: $variants
 
-Follow the block template strictly. Avoid JSON.
-""".strip()
+# ==============================================================================
+# SYNTHESIS PROMPTS
+# ==============================================================================
+
+SYNTHESIS_SYSTEM_PROMPT = "..."
+
+SYNTHESIS_USER_PROMPT_CREATIVE = "..."
+SYNTHESIS_USER_PROMPT_TECHNICAL = "..."
+SYNTHESIS_USER_PROMPT_MINIMAL = "..."

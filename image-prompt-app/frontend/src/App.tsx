@@ -1,17 +1,27 @@
 import { useEffect, useState } from 'react';
-import { BriefCard, type BriefValues } from './components/BriefCard';
+import { BriefCard } from './components/BriefCard';
 import { PromptTabs } from './components/PromptTabs';
-import type { ImageResult, ResearchOutput, SynthesisOutput } from './types/pipeline';
+import type { BriefValues, ImageResult, ResearchOutput, SynthesisOutput } from './types/pipeline';
 
 const defaultBrief: BriefValues = {
   topic: 'Friendly dinosaurs for classroom posters',
   audience: 'Elementary school children',
   age: '6-9 years',
-  depth: 3,
   variants: 2,
-  imagesPerPrompt: 1,
+  images_per_prompt: 1,
+
+  // Research
   research_model: 'gpt-4o-mini-2024-07-18',
+  research_mode: 'quick',
   reasoning_effort: 'auto',
+
+  // Synthesis
+  synthesis_mode: 'creative',
+
+  // Image
+  image_model: 'dall-e-3',
+  image_quality: 'standard',
+  image_size: '1024x1024',
 };
 
 function App() {

@@ -30,14 +30,17 @@ class GenerateRequest(BaseModel):
     topic: str
     audience: str
     age: str | None = None
-    depth: int = Field(default=1, ge=1, le=5)
     variants: int = Field(default=1, ge=1, le=6)
     images_per_prompt: int = Field(default=1, ge=1, le=4)
     mode: str = Field(default="full", pattern=r"^(full|prompts-only)$")
 
     # Research parameters
     research_model: str = Field(default=DEFAULT_CHAT_MODEL)
+    research_mode: str = Field(default="quick")
     reasoning_effort: str = Field(default="auto")
+
+    # Synthesis parameters
+    synthesis_mode: str = Field(default="creative")
 
     # Image parameters
     image_model: str = Field(default=DEFAULT_IMAGE_MODEL)
@@ -58,7 +61,7 @@ def generate(req: GenerateRequest) -> dict[str, Any]:
         topic=req.topic,
         audience=req.audience,
         age=req.age,
-        depth=req.depth,
+        research_mode=req.research_mode,
         model=req.research_model,
         reasoning_effort=req.reasoning_effort,
     )
@@ -69,6 +72,7 @@ def generate(req: GenerateRequest) -> dict[str, Any]:
         audience=req.audience,
         age=req.age,
         variants=req.variants,
+        synthesis_mode=req.synthesis_mode,
     )
     synthesis_result: SynthesisResponse = perform_synthesis(synth_req)
 

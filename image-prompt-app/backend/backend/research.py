@@ -14,9 +14,22 @@ from backend.openai_client import (
     has_valid_key,
     is_reasoning_model,
 )
-from backend.prompts import RESEARCH_SYSTEM, RESEARCH_USER
+from backend.prompts import (
+    RESEARCH_SYSTEM_PROMPT_DEEP_EXECUTE,
+    RESEARCH_SYSTEM_PROMPT_DEEP_PLAN,
+    RESEARCH_SYSTEM_PROMPT_EXPERT_EXECUTE,
+    RESEARCH_SYSTEM_PROMPT_EXPERT_JUDGE,
+    RESEARCH_SYSTEM_PROMPT_EXPERT_PLAN,
+    RESEARCH_SYSTEM_PROMPT_QUICK,
+    RESEARCH_USER_PROMPT_DEEP_EXECUTE,
+    RESEARCH_USER_PROMPT_DEEP_PLAN,
+    RESEARCH_USER_PROMPT_EXPERT_EXECUTE,
+    RESEARCH_USER_PROMPT_EXPERT_JUDGE,
+    RESEARCH_USER_PROMPT_EXPERT_PLAN,
+    RESEARCH_USER_PROMPT_QUICK,
+)
 from backend.schemas import RESEARCH_SCHEMA
-from backend.utils.json_sanitize import extract_json_text
+from backend.utils.json_sanitize import extract_json_text, parse_model_json
 from backend.utils.retry import retry_with_exponential_backoff
 
 logger = logging.getLogger(__name__)
@@ -29,7 +42,7 @@ class ResearchRequest(BaseModel):
     topic: str
     audience: str
     age: str | None = None
-    depth: int = Field(default=1, ge=1, le=5)
+    research_mode: str = Field(default="quick")
     model: str = Field(default=DEFAULT_CHAT_MODEL)
     reasoning_effort: str = Field(default="auto")
 
@@ -76,42 +89,144 @@ def _split_segments(text: str) -> list[str]:
 
 
 @retry_with_exponential_backoff()
-def _create_research_completion(
+def _call_llm_api(
     client: Any,
     messages: list[dict[str, str]],
     model: str,
     effort: str,
+    json_mode: bool = False,
 ) -> str:
     """Invoke the appropriate OpenAI API and return the text response."""
+    kwargs = {"model": model, "messages": messages}
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+
     if is_reasoning_model(model):
-        response = client.responses.create(
-            model=model,
-            input=messages,
-            reasoning={"effort": effort},
-            temperature=0.4,
-        )
+        response = client.responses.create(input=messages, reasoning={"effort": effort}, **kwargs)
         return getattr(response, "output_text", "")
     else:
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.4,
-        )
+        response = client.chat.completions.create(**kwargs)
         return getattr(response.choices[0].message, "content", "") if response.choices else ""
 
 
-def _render_research_messages(req: ResearchRequest) -> list[dict[str, str]]:
+def _render_research_messages(
+    system_prompt: str,
+    user_prompt_template: str,
+    req: ResearchRequest,
+    **kwargs: str,
+) -> list[dict[str, str]]:
+    """Render the chat messages for the research LLM call."""
     audience_age = req.age or "all ages"
     user_prompt = (
-        RESEARCH_USER.replace("$topic", req.topic)
+        user_prompt_template.replace("$topic", req.topic)
         .replace("$audience", req.audience)
         .replace("$age", audience_age)
-        .replace("$depth", str(req.depth))
     )
+    for key, value in kwargs.items():
+        user_prompt = user_prompt.replace(f"${key}", value)
+
     return [
-        {"role": "system", "content": RESEARCH_SYSTEM},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
+
+
+def _run_quick_research(client: Any, req: ResearchRequest) -> str:
+    """Run the quick research mode."""
+    messages = _render_research_messages(
+        RESEARCH_SYSTEM_PROMPT_QUICK,
+        RESEARCH_USER_PROMPT_QUICK,
+        req,
+    )
+    return _call_llm_api(
+        client,
+        messages,
+        model=req.model,
+        effort=req.reasoning_effort,
+        json_mode=True,
+    )
+
+
+def _run_deep_research(client: Any, req: ResearchRequest) -> str:
+    """Run the deep research mode using a plan-and-execute strategy."""
+    # Plan step
+    plan_messages = _render_research_messages(
+        RESEARCH_SYSTEM_PROMPT_DEEP_PLAN,
+        RESEARCH_USER_PROMPT_DEEP_PLAN,
+        req,
+    )
+    plan_text = _call_llm_api(
+        client,
+        plan_messages,
+        model=req.model,
+        effort=req.reasoning_effort,
+        json_mode=True,
+    )
+    plan = parse_model_json(plan_text, "research_plan", [])
+
+    # Execute step
+    execute_messages = _render_research_messages(
+        RESEARCH_SYSTEM_PROMPT_DEEP_EXECUTE,
+        RESEARCH_USER_PROMPT_DEEP_EXECUTE,
+        req,
+        research_plan=str(plan),
+    )
+    return _call_llm_api(
+        client,
+        execute_messages,
+        model=req.model,
+        effort=req.reasoning_effort,
+        json_mode=True,
+    )
+
+
+def _run_expert_research(client: Any, req: ResearchRequest) -> str:
+    """Run the expert research mode using a plan-and-execute strategy with a judge."""
+    # Plan step
+    plan_messages = _render_research_messages(
+        RESEARCH_SYSTEM_PROMPT_EXPERT_PLAN,
+        RESEARCH_USER_PROMPT_EXPERT_PLAN,
+        req,
+    )
+    plan_text = _call_llm_api(
+        client,
+        plan_messages,
+        model=req.model,
+        effort=req.reasoning_effort,
+        json_mode=True,
+    )
+    plan = parse_model_json(plan_text, "research_plan", [])
+
+    # Execute step
+    execute_messages = _render_research_messages(
+        RESEARCH_SYSTEM_PROMPT_EXPERT_EXECUTE,
+        RESEARCH_USER_PROMPT_EXPERT_EXECUTE,
+        req,
+        research_plan=str(plan),
+    )
+    draft_research = _call_llm_api(
+        client,
+        execute_messages,
+        model=req.model,
+        effort=req.reasoning_effort,
+        json_mode=True,
+    )
+
+    # Judge step
+    judge_messages = _render_research_messages(
+        RESEARCH_SYSTEM_PROMPT_EXPERT_JUDGE,
+        RESEARCH_USER_PROMPT_EXPERT_JUDGE,
+        req,
+        research_plan=str(plan),
+        draft_research=draft_research,
+    )
+    return _call_llm_api(
+        client,
+        judge_messages,
+        model=req.model,
+        effort=req.reasoning_effort,
+        json_mode=True,
+    )
 
 
 @router.post("/research", response_model=ResearchResponse)
@@ -124,22 +239,25 @@ def research(req: ResearchRequest) -> ResearchResponse:
         )
 
     client = get_openai_client()
-    if client is None:  # pragma: no cover - defensive path
+    if client is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OPENAI_API_KEY not configured",
         )
 
-    messages = _render_research_messages(req)
-
     try:
-        raw_text = _create_research_completion(
-            client,
-            messages,
-            model=req.model,
-            effort=req.reasoning_effort,
-        )
-    except Exception as exc:  # pragma: no cover - retried failure
+        if req.research_mode == "quick":
+            raw_text = _run_quick_research(client, req)
+        elif req.research_mode == "deep":
+            raw_text = _run_deep_research(client, req)
+        elif req.research_mode == "expert":
+            raw_text = _run_expert_research(client, req)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid research mode: {req.research_mode}",
+            )
+    except Exception as exc:
         logger.error("OpenAI research completion failed: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

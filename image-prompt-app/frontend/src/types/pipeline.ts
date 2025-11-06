@@ -27,11 +27,25 @@ export interface GenerateRequest {
   topic: string;
   audience: string;
   age?: string | null;
-  depth?: number;
   variants?: number;
   images_per_prompt?: number;
   mode?: 'full' | 'prompts-only';
+
+  // Research parameters
+  research_model?: string;
+  research_mode?: string;
+  reasoning_effort?: string;
+
+  // Synthesis parameters
+  synthesis_mode?: string;
+
+  // Image parameters
+  image_model?: string;
+  image_quality?: string;
+  image_size?: string;
 }
+
+export type BriefValues = GenerateRequest;
 
 export interface GenerateResponse {
   research: ResearchOutput;

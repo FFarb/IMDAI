@@ -24,7 +24,7 @@ async function runResearch(brief: BriefValues): Promise<ResearchOutput> {
     topic: brief.topic,
     audience: brief.audience,
     age: brief.age,
-    depth: brief.depth,
+    research_mode: brief.research_mode,
     model: brief.research_model,
     reasoning_effort: brief.reasoning_effort,
   });
@@ -36,14 +36,18 @@ async function runSynthesis(brief: BriefValues, research: ResearchOutput): Promi
     audience: brief.audience,
     age: brief.age,
     variants: brief.variants,
+    synthesis_mode: brief.synthesis_mode,
   });
 }
 
-async function runImageGeneration(prompt: SynthesisPrompt, count: number): Promise<ImageResult[]> {
+async function runImageGeneration(brief: BriefValues, prompt: SynthesisPrompt): Promise<ImageResult[]> {
   const payload = await postJson<{ data: ImageResult[] }>('/api/images', {
     prompt_positive: prompt.positive,
     prompt_negative: prompt.negative,
-    n: count,
+    n: brief.images_per_prompt,
+    model: brief.image_model,
+    quality: brief.image_quality,
+    size: brief.image_size,
   });
   return payload.data;
 }
@@ -176,7 +180,7 @@ export function PromptTabs({
     setIsLoading(true);
     setError(null);
     try {
-      const result = await runImageGeneration(prompt, brief.imagesPerPrompt);
+      const result = await runImageGeneration(brief, prompt);
       if (autosave) {
         const promptNum = selectedPromptIndex + 1;
         const existingImageCount = images[selectedPromptIndex]?.length ?? 0;

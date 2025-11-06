@@ -9,7 +9,12 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from backend.openai_client import GPT_SYNTH_MODEL, get_openai_client, has_valid_key
-from backend.prompts import SYNTH_SYSTEM, SYNTH_USER
+from backend.prompts import (
+    SYNTHESIS_SYSTEM_PROMPT,
+    SYNTHESIS_USER_PROMPT_CREATIVE,
+    SYNTHESIS_USER_PROMPT_MINIMAL,
+    SYNTHESIS_USER_PROMPT_TECHNICAL,
+)
 from backend.schemas import SYNTHESIS_SCHEMA
 from backend.utils.json_sanitize import extract_json_text
 from backend.utils.retry import retry_with_exponential_backoff
@@ -40,6 +45,7 @@ class SynthesisRequest(BaseModel):
     audience: str
     age: str | None = None
     variants: int = Field(default=1, ge=1, le=6)
+    synthesis_mode: str = Field(default="creative")
 
 
 @retry_with_exponential_backoff()
@@ -49,15 +55,26 @@ def _create_synthesis_completion(client: Any, messages: list[dict[str, str]]) ->
     return client.chat.completions.create(
         model=GPT_SYNTH_MODEL,
         messages=messages,
-        temperature=0.7,
     )
 
 
 def _render_synthesis_messages(req: SynthesisRequest) -> list[dict[str, str]]:
+    """Render the chat messages for the synthesis LLM call."""
     audience_age = req.age or "all ages"
-    system_prompt = SYNTH_SYSTEM.replace("$max_variants", str(req.variants))
+
+    if req.synthesis_mode == "creative":
+        user_prompt_template = SYNTHESIS_USER_PROMPT_CREATIVE
+    elif req.synthesis_mode == "technical":
+        user_prompt_template = SYNTHESIS_USER_PROMPT_TECHNICAL
+    elif req.synthesis_mode == "minimal":
+        user_prompt_template = SYNTHESIS_USER_PROMPT_MINIMAL
+    else:
+        # Default to creative if the mode is unknown
+        user_prompt_template = SYNTHESIS_USER_PROMPT_CREATIVE
+
+    system_prompt = SYNTHESIS_SYSTEM_PROMPT.replace("$max_variants", str(req.variants))
     user_prompt = (
-        SYNTH_USER.replace("$RESEARCH_TEXT", req.research_text)
+        user_prompt_template.replace("$RESEARCH_TEXT", req.research_text)
         .replace("$audience", req.audience)
         .replace("$age", audience_age)
         .replace("$variants", str(req.variants))
