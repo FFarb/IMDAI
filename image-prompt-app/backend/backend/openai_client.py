@@ -12,9 +12,12 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-GPT_RESEARCH_MODEL = "gpt-4o-mini-2024-07-18"
+DEFAULT_CHAT_MODEL = "gpt-4o-mini-2024-07-18"
 GPT_SYNTH_MODEL = "gpt-4o-mini-2024-07-18"
-GPT_IMAGE_MODEL = "gpt-image-1"
+DEFAULT_IMAGE_MODEL = "dall-e-3"
+
+# Models that use the new Reasoning API
+REASONING_MODELS = {"gpt-5-large", "gpt-5-small"}
 
 ALLOW_TRUE_GRADIENTS = os.getenv("ALLOW_TRUE_GRADIENTS", "false").lower() in {
     "1",
@@ -56,11 +59,17 @@ def has_valid_key() -> bool:
     return _client is not None
 
 
+def is_reasoning_model(model_name: str) -> bool:
+    """Return ``True`` if the model uses the new Reasoning API."""
+    return model_name.lower() in REASONING_MODELS
+
+
 __all__ = [
     "ALLOW_TRUE_GRADIENTS",
-    "GPT_IMAGE_MODEL",
-    "GPT_RESEARCH_MODEL",
+    "DEFAULT_IMAGE_MODEL",
+    "DEFAULT_CHAT_MODEL",
     "GPT_SYNTH_MODEL",
     "get_openai_client",
     "has_valid_key",
+    "is_reasoning_model",
 ]

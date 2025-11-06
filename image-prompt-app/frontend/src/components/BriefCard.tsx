@@ -7,13 +7,13 @@ export type BriefValues = {
   depth: number;
   variants: number;
   imagesPerPrompt: number;
+  research_model: string;
+  reasoning_effort: string;
 };
 
 interface BriefCardProps {
   values: BriefValues;
   onChange: (changes: Partial<BriefValues>) => void;
-  // This will be handled by buttons within each tab now
-  // onSubmit: (mode: GenerateMode) => void;
   isLoading: boolean;
 }
 
@@ -22,6 +22,11 @@ export function BriefCard({ values, onChange, isLoading }: BriefCardProps) {
     const { name, value, type } = event.target;
     const isNumber = type === 'number' || type === 'range';
     onChange({ [name]: isNumber ? Number(value) : value });
+  };
+
+  const handleSelect = (event: ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = event.target;
+    onChange({ [name]: value });
   };
 
   return (
@@ -108,6 +113,36 @@ export function BriefCard({ values, onChange, isLoading }: BriefCardProps) {
             onChange={handleInput}
             disabled={isLoading}
           />
+        </label>
+
+        <label className="field">
+          <span>Research Model</span>
+          <select
+            name="research_model"
+            value={values.research_model}
+            onChange={handleSelect}
+            disabled={isLoading}
+          >
+            <option value="gpt-4o-mini-2024-07-18">GPT-4o Mini</option>
+            <option value="gpt-5">GPT-5</option>
+            <option value="gpt-5-mini">GPT-5 Mini</option>
+            <option value="gpt-5-nano">GPT-5 Nano</option>
+          </select>
+        </label>
+
+        <label className="field">
+          <span>Reasoning Effort</span>
+          <select
+            name="reasoning_effort"
+            value={values.reasoning_effort}
+            onChange={handleSelect}
+            disabled={isLoading}
+          >
+            <option value="auto">Auto</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
         </label>
       </div>
     </section>

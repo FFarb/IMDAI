@@ -25,6 +25,8 @@ async function runResearch(brief: BriefValues): Promise<ResearchOutput> {
     audience: brief.audience,
     age: brief.age,
     depth: brief.depth,
+    model: brief.research_model,
+    reasoning_effort: brief.reasoning_effort,
   });
 }
 
@@ -56,6 +58,8 @@ interface PromptTabsProps {
   setSynthesis: (synthesis: SynthesisOutput | null) => void;
   setImages: (images: ImageResult[][]) => void;
   onClearPipeline: () => void;
+  autosave: boolean;
+  setAutosave: (value: boolean) => void;
 }
 
 type TabName = 'research' | 'synthesis' | 'images';
@@ -76,11 +80,42 @@ export function PromptTabs({
   setSynthesis,
   setImages,
   onClearPipeline,
+  autosave,
 }: PromptTabsProps) {
   const [activeTab, setActiveTab] = useState<TabName>('research');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPromptIndex, setSelectedPromptIndex] = useState(0);
+
+  const downloadTextFile = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadImageFile = (b64Json: string, filename: string) => {
+    const byteCharacters = atob(b64Json);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: 'image/png' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const handleResetPipeline = () => {
     onClearPipeline();
@@ -113,6 +148,12 @@ export function PromptTabs({
     try {
       const result = await runSynthesis(brief, research);
       setSynthesis(result);
+      if (autosave) {
+        result.prompts.forEach((prompt, index) => {
+          const content = `Positive Prompt:\n${prompt.positive}\n\nNegative Prompts:\n${prompt.negative.join('\n')}`;
+          downloadTextFile(content, `prompt_${index + 1}.txt`);
+        });
+      }
       setImages([]);
       setSelectedPromptIndex(0);
       setActiveTab('images');
@@ -136,6 +177,16 @@ export function PromptTabs({
     setError(null);
     try {
       const result = await runImageGeneration(prompt, brief.imagesPerPrompt);
+      if (autosave) {
+        const promptNum = selectedPromptIndex + 1;
+        const existingImageCount = images[selectedPromptIndex]?.length ?? 0;
+        result.forEach((item, index) => {
+          if (item.b64_json) {
+            const imageNum = existingImageCount + index + 1;
+            downloadImageFile(item.b64_json, `image_p${promptNum}_${imageNum}.png`);
+          }
+        });
+      }
       const nextImages = images.slice();
       nextImages[selectedPromptIndex] = result;
       setImages(nextImages);

@@ -10,12 +10,15 @@ const defaultBrief: BriefValues = {
   depth: 3,
   variants: 2,
   imagesPerPrompt: 1,
+  research_model: 'gpt-4o-mini-2024-07-18',
+  reasoning_effort: 'auto',
 };
 
 function App() {
   const [brief, setBrief] = useState<BriefValues>(() => {
     const saved = localStorage.getItem('brief');
-    return saved ? JSON.parse(saved) : defaultBrief;
+    const parsed = saved ? JSON.parse(saved) : {};
+    return { ...defaultBrief, ...parsed };
   });
   const [isBriefLoading] = useState(false);
   const [research, setResearch] = useState<ResearchOutput | null>(() => {
@@ -29,6 +32,10 @@ function App() {
   const [images, setImages] = useState<ImageResult[][]>(() => {
     const saved = localStorage.getItem('images');
     return saved ? JSON.parse(saved) : [];
+  });
+  const [autosave, setAutosave] = useState<boolean>(() => {
+    const saved = localStorage.getItem('autosave');
+    return saved ? JSON.parse(saved) : false;
   });
 
   useEffect(() => {
@@ -46,6 +53,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('images', JSON.stringify(images));
   }, [images]);
+
+  useEffect(() => {
+    localStorage.setItem('autosave', JSON.stringify(autosave));
+  }, [autosave]);
 
   const handleBriefChange = (changes: Partial<BriefValues>) => {
     setBrief((prev) => ({ ...prev, ...changes }));
@@ -69,7 +80,20 @@ function App() {
           <h1>IMDAI Image Prompt Lab</h1>
           <p>A streamlined workflow for generating creative image prompts.</p>
         </div>
-        <button onClick={handleReset} className="secondary">Reset State</button>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <div className="autosave-group">
+            <label className="autosave-toggle">
+              <input
+                type="checkbox"
+                checked={autosave}
+                onChange={(e) => setAutosave(e.target.checked)}
+              />
+              Autosave
+            </label>
+            <p className="field-hint">Saves generated files to your browser's Downloads folder.</p>
+          </div>
+          <button onClick={handleReset} className="secondary">Reset State</button>
+        </div>
       </header>
 
       <main className="app-main">
@@ -85,6 +109,8 @@ function App() {
           setSynthesis={setSynthesis}
           setImages={setImages}
           onClearPipeline={resetPipelineState}
+          autosave={autosave}
+          setAutosave={setAutosave}
         />
       </main>
     </div>

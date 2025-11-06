@@ -8,7 +8,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from backend.openai_client import GPT_RESEARCH_MODEL, get_openai_client, has_valid_key
+from backend.openai_client import (
+    DEFAULT_CHAT_MODEL,
+    get_openai_client,
+    has_valid_key,
+    is_reasoning_model,
+)
 from backend.prompts import RESEARCH_SYSTEM, RESEARCH_USER
 from backend.schemas import RESEARCH_SCHEMA
 from backend.utils.json_sanitize import extract_json_text
@@ -25,6 +30,8 @@ class ResearchRequest(BaseModel):
     audience: str
     age: str | None = None
     depth: int = Field(default=1, ge=1, le=5)
+    model: str = Field(default=DEFAULT_CHAT_MODEL)
+    reasoning_effort: str = Field(default="auto")
 
 
 class ResearchResponse(BaseModel):
@@ -69,14 +76,28 @@ def _split_segments(text: str) -> list[str]:
 
 
 @retry_with_exponential_backoff()
-def _create_research_completion(client: Any, messages: list[dict[str, str]]) -> Any:
-    """Invoke the OpenAI API and return the raw completion object."""
-
-    return client.chat.completions.create(
-        model=GPT_RESEARCH_MODEL,
-        messages=messages,
-        temperature=0.4,
-    )
+def _create_research_completion(
+    client: Any,
+    messages: list[dict[str, str]],
+    model: str,
+    effort: str,
+) -> str:
+    """Invoke the appropriate OpenAI API and return the text response."""
+    if is_reasoning_model(model):
+        response = client.responses.create(
+            model=model,
+            input=messages,
+            reasoning={"effort": effort},
+            temperature=0.4,
+        )
+        return getattr(response, "output_text", "")
+    else:
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.4,
+        )
+        return getattr(response.choices[0].message, "content", "") if response.choices else ""
 
 
 def _render_research_messages(req: ResearchRequest) -> list[dict[str, str]]:
@@ -96,7 +117,6 @@ def _render_research_messages(req: ResearchRequest) -> list[dict[str, str]]:
 @router.post("/research", response_model=ResearchResponse)
 def research(req: ResearchRequest) -> ResearchResponse:
     """Generate textual design research for the requested topic."""
-
     if not has_valid_key():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -113,7 +133,12 @@ def research(req: ResearchRequest) -> ResearchResponse:
     messages = _render_research_messages(req)
 
     try:
-        response = _create_research_completion(client, messages)
+        raw_text = _create_research_completion(
+            client,
+            messages,
+            model=req.model,
+            effort=req.reasoning_effort,
+        )
     except Exception as exc:  # pragma: no cover - retried failure
         logger.error("OpenAI research completion failed: %s", exc, exc_info=True)
         raise HTTPException(
@@ -121,7 +146,6 @@ def research(req: ResearchRequest) -> ResearchResponse:
             detail="LLM API call failed",
         )
 
-    raw_text = getattr(response.choices[0].message, "content", "") if response.choices else ""
     cleaned = _normalise_text(raw_text)
     if not cleaned:
         raise HTTPException(
