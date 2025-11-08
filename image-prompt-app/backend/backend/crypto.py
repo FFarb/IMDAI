@@ -3,36 +3,61 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, List
+import re
+from typing import Any, List, Optional
 
 import httpx
 import pandas as pd
 import pandas_ta as ta
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, ValidationError
+
+from backend.bybit.models import InstrumentsResponse
+from backend.bybit.parsers import (
+    get_contract_size,
+    pick,
+    to_float,
+    to_int,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/crypto", tags=["crypto"])
 
-futures_specs_cache: dict[str, Any] = {}
+futures_specs_cache: dict[tuple[str, str], "BybitSpecsResponse"] = {}
 
 
 class BybitSymbolRequest(BaseModel):
+    """Request payload for querying Bybit contract specifications."""
+
     symbol: str
+    category: str = "linear"
 
 
 class BybitSpecsResponse(BaseModel):
+    """Normalized response describing Bybit instrument specifications."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    symbol: str
+    category: str
     contract_size: float
-    tick_size: float
-    min_qty: float
-    step_size: float
-    max_leverage: float
-    maintenance_margin_rate: float
-    initial_margin_rate: float
-    taker_fee: float
-    maker_fee: float
-    funding_interval_minutes: int
+    tick_size: Optional[float] = None
+    qty_step: Optional[float] = None
+    min_order_qty: Optional[float] = None
+    max_order_qty: Optional[float] = None
+    leverage_min: Optional[float] = None
+    leverage_max: Optional[float] = None
+    taker_fee: Optional[float] = None
+    maker_fee: Optional[float] = None
+    funding_interval_minutes: Optional[int] = None
+    maintenance_margin_rate: Optional[float] = None
+    initial_margin_rate: Optional[float] = None
+
+    # Legacy aliases kept for backwards compatibility with earlier clients.
+    min_qty: Optional[float] = None
+    step_size: Optional[float] = None
+    max_leverage: Optional[float] = None
 
 
 class LiqPriceRequest(BaseModel):
@@ -88,39 +113,146 @@ async def get_kline(symbol: str = Query(..., min_length=1), interval: str = Quer
 
 BYBIT_V5_URL = "https://api.bybit.com"
 
+ALLOWED_INTERVALS = {
+    "1m",
+    "3m",
+    "5m",
+    "15m",
+    "30m",
+    "1h",
+    "2h",
+    "4h",
+    "6h",
+    "12h",
+    "1d",
+}
+
+MINUTE_TO_INTERVAL = {
+    1: "1m",
+    3: "3m",
+    5: "5m",
+    15: "15m",
+    30: "30m",
+    60: "1h",
+    120: "2h",
+    240: "4h",
+    360: "6h",
+    720: "12h",
+    1440: "1d",
+}
+
+
+def normalize_interval(raw_interval: str | int) -> str:
+    """Normalise interval strings used by Binance/Bybit endpoints."""
+
+    if isinstance(raw_interval, int):
+        minutes = raw_interval
+    else:
+        cleaned = raw_interval.strip().lower()
+        if cleaned in ALLOWED_INTERVALS:
+            return cleaned
+        if cleaned.isdigit():
+            minutes = int(cleaned)
+        else:
+            match = re.fullmatch(r"(\d+)\s*([mhd])", cleaned)
+            if not match:
+                raise HTTPException(status_code=422, detail=f"Unsupported interval: {raw_interval}")
+            value = int(match.group(1))
+            unit = match.group(2)
+            if unit == "m":
+                minutes = value
+            elif unit == "h":
+                minutes = value * 60
+            else:  # unit == "d"
+                minutes = value * 1440
+
+    if minutes in MINUTE_TO_INTERVAL:
+        return MINUTE_TO_INTERVAL[minutes]
+
+    raise HTTPException(status_code=422, detail=f"Unsupported minute interval: {minutes}")
+
+
+def _get_indicator_column(frame: pd.DataFrame, *candidates: str) -> pd.Series:
+    """Return the first matching column from ``frame``."""
+
+    for column in candidates:
+        if column in frame:
+            return frame[column]
+    raise KeyError(f"None of the columns {candidates} found in frame")
+
 
 @router.post("/bybit/specs")
 async def get_bybit_specs(request: BybitSymbolRequest) -> BybitSpecsResponse:
     """Fetch Bybit futures contract specifications."""
-    if request.symbol in futures_specs_cache:
-        return futures_specs_cache[request.symbol]
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"{BYBIT_V5_URL}/v5/market/instruments-info",
-            params={"category": "linear", "symbol": request.symbol},
-        )
-        response.raise_for_status()
-        data = response.json()
+    cache_key = (request.category.lower(), request.symbol.upper())
+    if cache_key in futures_specs_cache:
+        return futures_specs_cache[cache_key]
 
-    if not data.get("result", {}).get("list"):
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            response = await client.get(
+                f"{BYBIT_V5_URL}/v5/market/instruments-info",
+                params={"category": request.category, "symbol": request.symbol},
+            )
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:  # pragma: no cover - network call
+        logger.exception("Bybit returned an error while fetching specs: %s", exc)
+        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
+    except httpx.RequestError as exc:  # pragma: no cover - network call
+        logger.exception("Network error while contacting Bybit: %s", exc)
+        raise HTTPException(status_code=502, detail="Unable to fetch Bybit specifications") from exc
+
+    data = response.json()
+
+    try:
+        parsed = InstrumentsResponse.model_validate(data)
+    except ValidationError as exc:
+        logger.exception("Failed to validate Bybit instruments-info payload: %s", exc)
+        raise HTTPException(status_code=502, detail="Unexpected response from Bybit") from exc
+    instruments = parsed.result.list if parsed.result else []
+    if not instruments:
         raise HTTPException(status_code=404, detail="Symbol not found")
 
-    specs = data["result"]["list"][0]
-    result = BybitSpecsResponse(
-        contract_size=float(specs["contractVal"]),
-        tick_size=float(specs["priceFilter"]["tickSize"]),
-        min_qty=float(specs["lotSizeFilter"]["minOrderQty"]),
-        step_size=float(specs["lotSizeFilter"]["qtyStep"]),
-        max_leverage=float(specs["leverageFilter"]["maxLeverage"]),
-        maintenance_margin_rate=float(specs["riskParameters"]["maintainMarginRate"]),
-        initial_margin_rate=float(specs["riskParameters"]["initialMarginRate"]),
-        taker_fee=float(specs["feeRates"]["takerFeeRate"]),
-        maker_fee=float(specs["feeRates"]["makerFeeRate"]),
-        funding_interval_minutes=int(specs["fundingInterval"]),
+    instrument = instruments[0]
+    instrument_dict = instrument.model_dump(exclude_unset=True, exclude_none=True)
+    category = (parsed.result.category if parsed.result and parsed.result.category else request.category).lower()
+
+    contract_size = get_contract_size(instrument_dict, category)
+    tick_size = to_float(pick(instrument_dict, "priceFilter", "tickSize"))
+    qty_step = to_float(pick(instrument_dict, "lotSizeFilter", "qtyStep"))
+    min_order_qty = to_float(pick(instrument_dict, "lotSizeFilter", "minOrderQty"))
+    max_order_qty = to_float(pick(instrument_dict, "lotSizeFilter", "maxOrderQty"))
+    leverage_min = to_float(pick(instrument_dict, "leverageFilter", "minLeverage"))
+    leverage_max = to_float(pick(instrument_dict, "leverageFilter", "maxLeverage"))
+    maintenance_margin_rate = to_float(pick(instrument_dict, "riskParameters", "maintainMarginRate"))
+    initial_margin_rate = to_float(pick(instrument_dict, "riskParameters", "initialMarginRate"))
+    taker_fee = to_float(pick(instrument_dict, "feeRates", "takerFeeRate"))
+    maker_fee = to_float(pick(instrument_dict, "feeRates", "makerFeeRate"))
+    funding_interval_minutes = to_int(pick(instrument_dict, "fundingInterval"))
+
+    response_payload = BybitSpecsResponse(
+        symbol=instrument.symbol or request.symbol.upper(),
+        category=category,
+        contract_size=contract_size,
+        tick_size=tick_size,
+        qty_step=qty_step,
+        min_order_qty=min_order_qty,
+        max_order_qty=max_order_qty,
+        leverage_min=leverage_min,
+        leverage_max=leverage_max,
+        taker_fee=taker_fee,
+        maker_fee=maker_fee,
+        funding_interval_minutes=funding_interval_minutes,
+        maintenance_margin_rate=maintenance_margin_rate,
+        initial_margin_rate=initial_margin_rate,
+        min_qty=min_order_qty,
+        step_size=qty_step,
+        max_leverage=leverage_max,
     )
-    futures_specs_cache[request.symbol] = result
-    return result
+
+    futures_specs_cache[cache_key] = response_payload
+    return response_payload
 
 
 @router.get("/bybit/market_price")
@@ -219,7 +351,6 @@ class IndicatorDashboardResponse(BaseModel):
     indicators: List[IndicatorSignal]
 
 
-@router.get("/indicator_dashboard", response_model=IndicatorDashboardResponse)
 async def _fetch_bybit_data(endpoint: str, symbol: str, params: dict[str, Any]) -> list[Any]:
     """Helper to fetch data from Bybit v5 API."""
     async with httpx.AsyncClient() as client:
@@ -236,15 +367,22 @@ async def _fetch_bybit_data(endpoint: str, symbol: str, params: dict[str, Any]) 
             return []
 
 
+@router.get("/indicator_dashboard", response_model=IndicatorDashboardResponse)
 async def get_indicator_dashboard(
     symbol: str = Query("BTCUSDT"), interval: str = Query("15m")
 ) -> IndicatorDashboardResponse:
     """Fetch and compute a dashboard of technical indicators."""
+    normalized_interval = normalize_interval(interval)
+
     # Fetch all required data in parallel
     kline_data, funding_rate_data, open_interest_data = await asyncio.gather(
-        get_kline(symbol=symbol, interval=interval),
+        get_kline(symbol=symbol, interval=normalized_interval),
         _fetch_bybit_data("/v5/market/funding/history", symbol, {"limit": 200}),
-        _fetch_bybit_data("/v5/market/open-interest", symbol, {"intervalTime": interval, "limit": 200}),
+        _fetch_bybit_data(
+            "/v5/market/open-interest",
+            symbol,
+            {"intervalTime": normalized_interval, "limit": 200},
+        ),
     )
 
     if not kline_data:
@@ -325,14 +463,27 @@ async def get_indicator_dashboard(
     indicators.append(IndicatorSignal(name="ADX", params="14", signal=signal, streak=streak))
 
     supertrend = ta.supertrend(df["high"], df["low"], df["close"], length=14, multiplier=3)
-    st_signal = pd.Series(df['close'] > supertrend['SUPERT_14_3.0']).astype(int) - pd.Series(df['close'] < supertrend['SUPERT_14_3.0']).astype(int)
+    supertrend_line = _get_indicator_column(supertrend, "SUPERT_14_3.0", "SUPERT_14_3")
+    st_signal = pd.Series(df["close"] > supertrend_line).astype(int) - pd.Series(df["close"] < supertrend_line).astype(int)
     signal, streak = get_signal_and_streak(st_signal)
     indicators.append(IndicatorSignal(name="SuperTrend", params="14, 3", signal=signal, streak=streak))
 
-    ichimoku = ta.ichimoku(df["high"], df["low"], df["close"], tenkan=9, kijun=26, senkou=52, ichimoku_spans=True, ichimoku_kc=True)
-    price_gt_kumo = (df['close'] > ichimoku[0]['ISA_9_26_52']) & (df['close'] > ichimoku[0]['ISB_9_26_52'])
-    price_lt_kumo = (df['close'] < ichimoku[0]['ISA_9_26_52']) & (df['close'] < ichimoku[0]['ISB_9_26_52'])
-    tenkan_gt_kijun = ichimoku[0]['ITS_9'] > ichimoku[0]['IKS_26']
+    ichimoku = ta.ichimoku(
+        df["high"],
+        df["low"],
+        df["close"],
+        tenkan=9,
+        kijun=26,
+        senkou=52,
+        ichimoku_spans=True,
+        ichimoku_kc=True,
+    )
+    ichimoku_cloud = ichimoku[0]
+    isa = _get_indicator_column(ichimoku_cloud, "ISA_9_26_52", "ISA_9")
+    isb = _get_indicator_column(ichimoku_cloud, "ISB_9_26_52", "ISB_26")
+    price_gt_kumo = (df["close"] > isa) & (df["close"] > isb)
+    price_lt_kumo = (df["close"] < isa) & (df["close"] < isb)
+    tenkan_gt_kijun = ichimoku_cloud["ITS_9"] > ichimoku_cloud["IKS_26"]
     ichimoku_long = price_gt_kumo & tenkan_gt_kijun
     ichimoku_short = price_lt_kumo & ~tenkan_gt_kijun
     ichimoku_signal = ichimoku_long.astype(int) - ichimoku_short.astype(int)
@@ -381,8 +532,20 @@ async def get_indicator_dashboard(
     indicators.append(IndicatorSignal(name="ATR", params="14", signal=signal, streak=streak))
 
     bbands = ta.bbands(df["close"], length=20, std=2)
-    bb_long = df["close"] < bbands['BBL_20_2.0']
-    bb_short = df["close"] > bbands['BBU_20_2.0']
+    bb_lower = _get_indicator_column(
+        bbands,
+        "BBL_20_2.0",
+        "BBL_20_2",
+        "BBL_20_2.0_2.0",
+    )
+    bb_upper = _get_indicator_column(
+        bbands,
+        "BBU_20_2.0",
+        "BBU_20_2",
+        "BBU_20_2.0_2.0",
+    )
+    bb_long = df["close"] < bb_lower
+    bb_short = df["close"] > bb_upper
     bb_signal = bb_long.astype(int) - bb_short.astype(int)
     signal, streak = get_signal_and_streak(bb_signal)
     indicators.append(IndicatorSignal(name="Bollinger Bands", params="20, 2", signal=signal, streak=streak))
