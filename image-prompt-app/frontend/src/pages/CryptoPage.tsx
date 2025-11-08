@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BybitCalculator } from '../components/BybitCalculator';
 import {
   ColorType,
   LineStyle,
@@ -303,6 +304,7 @@ export function CryptoPage(): JSX.Element {
         <div className="chart-container" ref={chartContainerRef} role="img" aria-label={`Candlestick chart for ${symbolLabel}`} />
         {error && <div className="toast error">{error}</div>}
       </div>
+      <BybitCalculator />
     </div>
   );
 }
