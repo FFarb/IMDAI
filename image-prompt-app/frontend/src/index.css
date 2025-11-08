@@ -37,6 +37,10 @@ body {
   gap: 1rem;
 }
 
+.app-header--global {
+  align-items: flex-end;
+}
+
 .app-header h1 {
   margin: 0;
   font-size: 1.9rem;
@@ -67,6 +71,120 @@ body {
 .app-main {
   display: grid;
   gap: 1.5rem;
+}
+
+.tab-nav {
+  display: inline-flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tab-button {
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #111827;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.tab-button.active {
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #ffffff;
+  box-shadow: 0 12px 25px rgba(99, 102, 241, 0.3);
+}
+
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.image-lab-page {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.image-lab-content {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.crypto-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.crypto-controls {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.crypto-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.crypto-control span {
+  font-weight: 600;
+  color: #111827;
+}
+
+.crypto-control select {
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.95rem;
+  background: #f9fafb;
+  font-family: inherit;
+}
+
+.chart-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 520px;
+}
+
+.chart-container canvas {
+  border-radius: 16px;
+}
+
+.autosave-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.autosave-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.secondary {
+  background: #111827;
+  color: #ffffff;
 }
 
 .card {
