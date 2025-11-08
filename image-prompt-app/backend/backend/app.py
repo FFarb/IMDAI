@@ -12,6 +12,7 @@ from backend.generate import router as generate_router
 from backend.images import router as images_router
 from backend.research import router as research_router
 from backend.synthesize import router as synthesize_router
+from backend.crypto import router as crypto_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -29,6 +30,7 @@ app.include_router(research_router)
 app.include_router(synthesize_router)
 app.include_router(images_router)
 app.include_router(generate_router)
+app.include_router(crypto_router)
 
 
 @app.get("/api/health")
