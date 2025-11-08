@@ -1,0 +1,8 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Uvicorn
+uvicorn_output.log

@@ -364,6 +364,50 @@ button.primary {
   cursor: pointer;
 }
 
+.indicator-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.indicator-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background-color: #f3f4f6;
+  border-radius: 8px;
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.indicator-name {
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
+.indicator-signal {
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.signal-long {
+  background-color: #10b981;
+  color: #ffffff;
+}
+
+.signal-short {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.signal-neutral {
+  background-color: #d1d5db;
+  color: #1f2937;
+}
+
 .inline-form {
   display: flex;
   gap: 0.5rem;
