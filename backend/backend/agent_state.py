@@ -33,8 +33,8 @@ class AgentState(TypedDict):
     style_context: list[dict]
     """Retrieved historical prompts/styles from Agent-Historian (RAG)."""
     
-    master_strategy: str
-    """Synthesized strategy from Agent-Analyst."""
+    master_strategy: dict
+    """Synthesized strategy from Agent-Analyst (Structured JSON)."""
 
     market_trends: str
     """Market trend analysis from Agent-Trend."""
