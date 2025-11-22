@@ -745,6 +745,12 @@ button.primary {
   border-left-color: #8b5cf6;
 }
 
+.thought-skipped {
+  opacity: 0.6;
+  filter: grayscale(100%);
+  border-left-color: #9ca3af;
+}
+
 .thought-loading {
   border-left-color: #f59e0b;
   background: #fef3c7;
@@ -752,9 +758,12 @@ button.primary {
 }
 
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.7;
   }

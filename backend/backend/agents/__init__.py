@@ -7,6 +7,8 @@ from backend.agents.promptsmith_agent import promptsmith_agent
 from backend.agents.trend_agent import trend_agent
 from backend.agents.vision_agent import vision_agent
 
+from backend.agents.marketer_agent import marketer_agent
+
 __all__ = [
     "vision_agent",
     "trend_agent",
@@ -14,4 +16,5 @@ __all__ = [
     "analyst_agent",
     "promptsmith_agent",
     "critic_agent",
+    "marketer_agent",
 ]

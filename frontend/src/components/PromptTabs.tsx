@@ -59,7 +59,7 @@ export function PromptTabs({
     onClearPipeline();
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (skipResearch = false) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -81,6 +81,13 @@ export function PromptTabs({
         research_mode: brief.research_mode,
         reasoning_effort: brief.reasoning_effort,
         synthesis_mode: brief.synthesis_mode,
+        // New controls
+        trend_count: brief.trend_count,
+        history_count: brief.history_count,
+        skip_research: skipResearch,
+        provided_strategy: skipResearch && result?.agent_system?.master_strategy
+          ? JSON.parse(result.agent_system.master_strategy)
+          : undefined,
       }) as AgentGenerateResponse;
 
       setResult(response);
@@ -128,11 +135,23 @@ export function PromptTabs({
           <button
             type="button"
             className="primary"
-            onClick={handleGenerate}
+            onClick={() => handleGenerate(false)}
             disabled={isLoading || isBriefLoading || !brief.topic.trim()}
           >
             {isLoading ? '🤖 AI Swarm Working...' : '🚀 Generate POD Designs'}
           </button>
+
+          {result && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => handleGenerate(true)}
+              disabled={isLoading}
+              style={{ marginLeft: '1rem' }}
+            >
+              ✨ Generate More Variants
+            </button>
+          )}
         </div>
 
         {/* Agent System Info */}

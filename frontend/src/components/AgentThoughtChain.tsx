@@ -62,10 +62,13 @@ export function AgentThoughtChain({ events, isActive }: AgentThoughtChainProps):
                         };
 
                         const icon = agentIcons[event.agent] || '🤖';
+                        const isSkipped = event.data?.message?.includes('Skipping');
+                        const displayIcon = isSkipped ? '⏩' : icon;
+                        const itemClass = `thought-item thought-agent ${isSkipped ? 'thought-skipped' : ''}`;
 
                         return (
-                            <div key={idx} className="thought-item thought-agent">
-                                <div className="thought-icon">{icon}</div>
+                            <div key={idx} className={itemClass}>
+                                <div className="thought-icon">{displayIcon}</div>
                                 <div className="thought-content">
                                     <div className="thought-title">{event.agent_name}</div>
                                     {event.data?.message && (

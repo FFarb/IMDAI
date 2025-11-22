@@ -11,8 +11,11 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 
 from backend.agent_state import AgentState
-from backend.tools.search import search_trends
+from backend.tools.search import search_trends, search_images
 from backend.openai_client import get_model
+import requests
+import base64
+from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +42,19 @@ def trend_agent(state: AgentState) -> AgentState:
     """
     logger.info("Agent-Trend: Hunting for trends...")
     
+    # Circuit Breaker
+    if state.get("skip_research"):
+        logger.info("Skipping Agent-Trend due to skip_research flag.")
+        return state
+
     user_brief = state.get("user_brief", "")
+    trend_count = state.get("trend_count", 3)
+    
+    if trend_count == 0:
+        logger.info("Trend count is 0, skipping search.")
+        state["market_trends"] = "Trend search disabled."
+        state["trend_references"] = []
+        return state
     
     # 1. Perform Search
     # We'll search for t-shirt and sticker trends related to the topic
@@ -51,7 +66,7 @@ def trend_agent(state: AgentState) -> AgentState:
     
     search_results = ""
     for q in queries:
-        results = search_trends(q, max_results=3)
+        results = search_trends(q, max_results=trend_count)
         search_results += f"\nQuery: {q}\nResults:\n{results}\n"
         
     # 2. Analyze with LLM
@@ -67,7 +82,30 @@ def trend_agent(state: AgentState) -> AgentState:
     
     logger.info("Agent-Trend: Analysis complete.")
     
+    # 3. Visual Trend Hunting
+    logger.info("Agent-Trend: Hunting for visual trends...")
+    trend_references = []
+    
+    # Use the first query for image search as it's usually the most relevant
+    image_query = queries[0]
+    image_urls = search_images(image_query, max_results=trend_count)
+    
+    for url in image_urls:
+        try:
+            # Download image
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                # Convert to base64
+                img_bytes = BytesIO(response.content)
+                b64_data = base64.b64encode(img_bytes.getvalue()).decode('utf-8')
+                mime_type = response.headers.get('content-type', 'image/jpeg')
+                trend_references.append(f"data:{mime_type};base64,{b64_data}")
+        except Exception as e:
+            logger.warning(f"Failed to download trend image {url}: {e}")
+            continue
+
     # Update state
     state["market_trends"] = str(market_trends)
+    state["trend_references"] = trend_references
     
     return state

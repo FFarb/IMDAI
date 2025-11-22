@@ -35,6 +35,10 @@ export interface GenerateRequest {
   use_agents?: boolean;
   visual_references?: string[];
   max_iterations?: number;
+  trend_count?: number;
+  history_count?: number;
+  skip_research?: boolean;
+  provided_strategy?: any;
 
   // Research parameters
   research_model?: string;

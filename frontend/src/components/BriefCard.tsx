@@ -260,6 +260,32 @@ export function BriefCard({ values, onChange, isLoading }: BriefCardProps) {
             disabled={isLoading}
           />
         </label>
+
+        <label className="field">
+          <span>Trend Sources ({values.trend_count ?? 3})</span>
+          <input
+            type="range"
+            name="trend_count"
+            min={0}
+            max={10}
+            value={values.trend_count ?? 3}
+            onChange={handleInput}
+            disabled={isLoading}
+          />
+        </label>
+
+        <label className="field">
+          <span>Historical Presets ({values.history_count ?? 3})</span>
+          <input
+            type="range"
+            name="history_count"
+            min={0}
+            max={10}
+            value={values.history_count ?? 3}
+            onChange={handleInput}
+            disabled={isLoading}
+          />
+        </label>
       </div>
     </section>
   );

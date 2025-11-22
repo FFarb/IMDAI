@@ -39,6 +39,12 @@ class AgentState(TypedDict):
     market_trends: str
     """Market trend analysis from Agent-Trend."""
 
+    trend_references: list[str]
+    """Base64 encoded trend images found by Agent-Trend."""
+
+    listing_data: dict
+    """SEO and listing metadata from Agent-Marketer."""
+
     current_prompts: list[dict]
     """Generated prompt candidates from Agent-Promptsmith."""
     
@@ -79,6 +85,19 @@ class AgentState(TypedDict):
     
     image_size: str
     """Image size setting."""
+
+    # Control parameters
+    trend_count: int
+    """Number of trend references to fetch."""
+
+    history_count: int
+    """Number of historical styles to retrieve."""
+
+    skip_research: bool
+    """Whether to skip research agents and use provided strategy."""
+
+    provided_strategy: dict | None
+    """Pre-defined strategy to use when skipping research."""
 
 
 __all__ = ["AgentState"]

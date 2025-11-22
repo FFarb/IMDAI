@@ -32,3 +32,26 @@ def search_trends(query: str, max_results: int = 5) -> str:
     except Exception as e:
         logger.error(f"Search failed: {e}")
         return f"Error retrieving trends: {str(e)}"
+
+def search_images(query: str, max_results: int = 3) -> list[str]:
+    """Search for images using DuckDuckGo.
+    
+    Args:
+        query: Search query string.
+        max_results: Number of results to return.
+        
+    Returns:
+        List of image URLs.
+    """
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.images(query, max_results=max_results))
+            
+        if not results:
+            return []
+            
+        return [r['image'] for r in results]
+        
+    except Exception as e:
+        logger.error(f"Image search failed: {e}")
+        return []

@@ -21,6 +21,7 @@ class DesignStrategy(BaseModel):
     mood: str = Field(description="The emotional tone (e.g. 'Stoic, determined').")
     technical_constraints: List[str] = Field(description="List of technical rules (e.g. 'No gradients', 'Thick outlines').")
     commercial_hook: str = Field(description="Why this design will sell based on trends.")
+    reference_blending_instructions: str = Field(description="How to blend User Refs (Subject) vs Trend Refs (Style).")
 
 SYSTEM_PROMPT = """You are Agent-Analyst (The Commercial Art Director).
 Your goal is to synthesize a "Master Strategy" for a Print-on-Demand (POD) product design.
@@ -39,6 +40,10 @@ Constraints & Best Practices:
 - **Limit color palettes:** Use 4-6 distinct colors for screen printing compatibility.
 - **Style:** Avoid complex lighting effects. Prefer flat, cel-shaded, or vector styles.
 - **Commercial Viability:** Ensure the design has a clear hook for the target audience.
+
+**Blending Strategy:**
+- If User Refs exist: "Keep user composition/subject, adopt trend colors/shading."
+- If NO User Refs: "Fully adopt trend style and subject suggestions."
 """
 
 def analyst_agent(state: AgentState) -> AgentState:
@@ -52,6 +57,14 @@ def analyst_agent(state: AgentState) -> AgentState:
     """
     logger.info("Agent-Analyst: Synthesizing strategy...")
     
+    # Circuit Breaker
+    if state.get("skip_research"):
+        logger.info("Skipping Agent-Analyst due to skip_research flag.")
+        if state.get("provided_strategy"):
+            logger.info("Using provided strategy.")
+            state["master_strategy"] = state["provided_strategy"]
+        return state
+
     user_brief = state.get("user_brief", "")
     vision_analysis = state.get("vision_analysis", "None")
     style_context = state.get("style_context", [])
@@ -94,7 +107,8 @@ Historical Successful Prompts:
             "composition": "Centered",
             "mood": "Neutral",
             "technical_constraints": ["No gradients"],
-            "commercial_hook": "N/A"
+            "commercial_hook": "N/A",
+            "reference_blending_instructions": "Standard style."
         }
     
     return state

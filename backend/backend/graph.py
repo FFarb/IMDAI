@@ -15,6 +15,7 @@ from backend.agents import (
     promptsmith_agent,
     trend_agent,
     vision_agent,
+    marketer_agent,
 )
 from backend.post_processing import background_remover
 
@@ -91,6 +92,7 @@ def create_workflow() -> StateGraph:
     workflow.add_node("critic", critic_agent)
     workflow.add_node("increment", increment_iteration)
     workflow.add_node("background_remover", background_remover)
+    workflow.add_node("marketer", marketer_agent)
     
     # Define the flow
     workflow.set_entry_point("vision")
@@ -114,7 +116,9 @@ def create_workflow() -> StateGraph:
     workflow.add_edge("increment", "promptsmith")
     
     # End after background removal
-    workflow.add_edge("background_remover", END)
+    # End after background removal
+    workflow.add_edge("background_remover", "marketer")
+    workflow.add_edge("marketer", END)
     
     # Compile the graph
     return workflow.compile()
@@ -130,7 +134,12 @@ def run_workflow(
     image_model: str = "dall-e-3",
     image_quality: str = "standard",
     image_size: str = "1024x1024",
+    image_size: str = "1024x1024",
     max_iterations: int = 3,
+    trend_count: int = 3,
+    history_count: int = 3,
+    skip_research: bool = False,
+    provided_strategy: dict | None = None,
 ) -> AgentState:
     """Run the complete multi-agent workflow.
     
@@ -161,6 +170,8 @@ def run_workflow(
         "style_context": [],
         "master_strategy": {},
         "market_trends": "",
+        "trend_references": [],
+        "listing_data": {},
         "current_prompts": [],
         "critique_feedback": "",
         "critique_score": 0.0,
@@ -194,7 +205,12 @@ def stream_workflow(
     image_model: str = "dall-e-3",
     image_quality: str = "standard",
     image_size: str = "1024x1024",
+    image_size: str = "1024x1024",
     max_iterations: int = 3,
+    trend_count: int = 3,
+    history_count: int = 3,
+    skip_research: bool = False,
+    provided_strategy: dict | None = None,
 ):
     """Stream the multi-agent workflow execution.
     
@@ -218,6 +234,8 @@ def stream_workflow(
         "style_context": [],
         "master_strategy": {},
         "market_trends": "",
+        "trend_references": [],
+        "listing_data": {},
         "current_prompts": [],
         "critique_feedback": "",
         "critique_score": 0.0,

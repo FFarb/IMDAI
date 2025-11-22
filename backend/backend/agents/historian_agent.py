@@ -22,6 +22,17 @@ def historian_agent(state: AgentState) -> AgentState:
     """
     logger.info("Agent-Historian searching for similar styles...")
     
+    # Circuit Breaker
+    if state.get("skip_research"):
+        logger.info("Skipping Agent-Historian due to skip_research flag.")
+        return state
+
+    history_count = state.get("history_count", 3)
+    if history_count == 0:
+        logger.info("History count is 0, skipping retrieval.")
+        state["style_context"] = []
+        return state
+
     # Build search query from user brief and vision analysis
     query_parts = [state.get("user_brief", "")]
     
@@ -37,7 +48,7 @@ def historian_agent(state: AgentState) -> AgentState:
     
     try:
         # Retrieve similar styles from RAG
-        similar_styles = retrieve_similar_styles(query, k=3)
+        similar_styles = retrieve_similar_styles(query, k=history_count)
         state["style_context"] = similar_styles
         
         # Format findings for message history

@@ -41,6 +41,10 @@ class GenerateRequest(BaseModel):
     use_agents: bool = Field(default=False, description="Use multi-agent system instead of linear pipeline")
     visual_references: list[str] = Field(default=[], description="Base64 encoded images or URLs")
     max_iterations: int = Field(default=3, ge=1, le=5, description="Max refinement iterations")
+    trend_count: int = Field(default=3, ge=0, le=10, description="Number of trend references")
+    history_count: int = Field(default=3, ge=0, le=10, description="Number of historical references")
+    skip_research: bool = Field(default=False, description="Skip research phase")
+    provided_strategy: dict | None = Field(default=None, description="Strategy to use if skipping research")
 
     # Research parameters (legacy)
     research_model: str = Field(default=DEFAULT_CHAT_MODEL)
@@ -136,7 +140,12 @@ def _generate_with_agents(req: GenerateRequest) -> dict[str, Any]:
             image_model=req.image_model,
             image_quality=req.image_quality,
             image_size=req.image_size,
+            image_size=req.image_size,
             max_iterations=req.max_iterations,
+            trend_count=req.trend_count,
+            history_count=req.history_count,
+            skip_research=req.skip_research,
+            provided_strategy=req.provided_strategy,
         )
         
         # Generate images if mode is "full"
@@ -215,7 +224,12 @@ async def generate_stream(req: GenerateRequest):
                 image_model=req.image_model,
                 image_quality=req.image_quality,
                 image_size=req.image_size,
+                image_size=req.image_size,
                 max_iterations=req.max_iterations,
+                trend_count=req.trend_count,
+                history_count=req.history_count,
+                skip_research=req.skip_research,
+                provided_strategy=req.provided_strategy,
             ):
                 # Map node names to friendly agent names
                 agent_map = {
