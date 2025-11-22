@@ -7,6 +7,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,32 @@ def is_reasoning_model(model_name: str) -> bool:
     return model_name.lower() in REASONING_MODELS
 
 
+def get_model(model_name: str = DEFAULT_CHAT_MODEL, temperature: float = 0.7) -> ChatOpenAI:
+    """Create and return a ChatOpenAI model instance.
+    
+    Args:
+        model_name: The OpenAI model to use (default: gpt-4o-mini-2024-07-18).
+        temperature: Temperature setting for the model (default: 0.7).
+        
+    Returns:
+        ChatOpenAI instance configured with the specified parameters.
+        
+    Raises:
+        ValueError: If no valid OpenAI API key is configured.
+    """
+    if not has_valid_key():
+        raise ValueError(
+            "No valid OpenAI API key configured. "
+            "Please set OPENAI_API_KEY in your .env file."
+        )
+    
+    return ChatOpenAI(
+        model=model_name,
+        temperature=temperature,
+        api_key=_OPENAI_API_KEY,
+    )
+
+
 __all__ = [
     "ALLOW_TRUE_GRADIENTS",
     "DEFAULT_IMAGE_MODEL",
@@ -72,4 +99,5 @@ __all__ = [
     "get_openai_client",
     "has_valid_key",
     "is_reasoning_model",
+    "get_model",
 ]

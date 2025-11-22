@@ -1,32 +1,37 @@
-# IMDAI Multi-Agent System
+# IMDAI Multi-Agent System - POD Merch Swarm
 
-This document describes the new multi-agent architecture for IMDAI.
+This document describes the **POD Merch Swarm** architecture for IMDAI.
 
 ## Architecture Overview
 
-The system has been refactored from a linear pipeline to an **Event-Driven Multi-Agent System** using LangGraph.
+The system is an **Event-Driven Multi-Agent System** using LangGraph, specialized for **Print-on-Demand (POD)** product design.
 
 ### Agent Swarm
 
 1. **Agent-Vision (The Eye)** - Analyzes uploaded reference images using GPT-4o Vision
-2. **Agent-Historian (The Memory)** - Retrieves similar historical prompts using RAG (ChromaDB)
-3. **Agent-Analyst (The Brain)** - Synthesizes all inputs into a master strategy
-4. **Agent-Promptsmith (The Creator)** - Generates image prompts based on strategy
-5. **Agent-Critic (Quality Control)** - Reviews prompts and triggers refinement loops
+2. **Agent-Trend (The Hunter)** - Searches live market data for trending POD aesthetics and bestsellers
+3. **Agent-Historian (The Memory)** - Retrieves similar historical prompts using RAG (ChromaDB)
+4. **Agent-Analyst (The Strategist)** - Synthesizes all inputs into a commercial-focused master strategy
+5. **Agent-Promptsmith (The Creator)** - Generates POD-optimized prompts with hardcoded constraints
+6. **Agent-Critic (Quality Control)** - Reviews prompts and triggers refinement loops
 
 ### Workflow
 
 ```
-START → Vision → Historian → Analyst → Promptsmith → Critic → [Decision]
-                                                          ↓
-                                                    [score >= 7?]
-                                                     ↙        ↘
-                                                  YES         NO
-                                                   ↓           ↓
-                                                  END    → Promptsmith (loop)
+START → Vision → Trend → Historian → Analyst → Promptsmith → Critic → [Decision]
+                                                                  ↓
+                                                            [score >= 7?]
+                                                             ↙        ↘
+                                                          YES         NO
+                                                           ↓           ↓
+                                                    Post-Process  → Promptsmith (loop)
+                                                    (Remove BG)
+                                                           ↓
+                                                          END
 ```
 
 The Critic agent scores prompts 0-10. If score < 7, it loops back to Promptsmith with feedback (max 3 iterations).
+After approval, the **Post-Process** node removes backgrounds for transparent PNGs.
 
 ## Setup Instructions
 
@@ -166,13 +171,18 @@ backend/
 │   ├── agent_state.py          # Shared state schema
 │   ├── rag.py                  # ChromaDB RAG implementation
 │   ├── graph.py                # LangGraph workflow
+│   ├── post_processing.py      # Background removal node
 │   ├── generate.py             # API endpoints (legacy + agents)
-│   └── agents/
-│       ├── vision_agent.py
-│       ├── historian_agent.py
-│       ├── analyst_agent.py
-│       ├── promptsmith_agent.py
-│       └── critic_agent.py
+│   ├── agents/
+│   │   ├── vision_agent.py
+│   │   ├── trend_agent.py      # [NEW] Market trend hunter
+│   │   ├── historian_agent.py
+│   │   ├── analyst_agent.py
+│   │   ├── promptsmith_agent.py
+│   │   └── critic_agent.py
+│   └── tools/
+│       ├── search.py           # [NEW] DuckDuckGo trend search
+│       └── image_proc.py       # [NEW] Background removal
 ├── seed_db.py                  # Database seeder script
 └── .chromadb/                  # Vector database storage
 

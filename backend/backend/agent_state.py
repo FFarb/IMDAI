@@ -35,7 +35,10 @@ class AgentState(TypedDict):
     
     master_strategy: str
     """Synthesized strategy from Agent-Analyst."""
-    
+
+    market_trends: str
+    """Market trend analysis from Agent-Trend."""
+
     current_prompts: list[dict]
     """Generated prompt candidates from Agent-Promptsmith."""
     
@@ -44,6 +47,9 @@ class AgentState(TypedDict):
     
     critique_score: float
     """Quality score (0-10) from Agent-Critic."""
+    
+    is_safe_for_print: bool
+    """Flag indicating if the design is safe for print."""
     
     generated_images: list[str]
     """List of generated image URLs."""

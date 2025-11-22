@@ -6,9 +6,16 @@ echo   Starting Frontend Server
 echo ===============================
 
 cd frontend
-npm run dev
+if not exist "node_modules" (
+    echo Error: node_modules not found.
+    echo Please run installfront.bat first.
+    pause
+    exit /b 1
+)
+
+call npm run dev
 
 echo ===============================
-echo   Frontend server launched
+echo   Frontend server stopped
 echo ===============================
 pause

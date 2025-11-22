@@ -13,20 +13,22 @@ from backend.agents import (
     critic_agent,
     historian_agent,
     promptsmith_agent,
+    trend_agent,
     vision_agent,
 )
+from backend.post_processing import background_remover
 
 logger = logging.getLogger(__name__)
 
 
-def should_refine(state: AgentState) -> Literal["refine", "end"]:
+def should_refine(state: AgentState) -> Literal["refine", "process_images"]:
     """Decide whether to refine prompts or end the workflow.
     
     Args:
         state: Current agent state.
         
     Returns:
-        "refine" if score < 7 and iterations < max, otherwise "end".
+        "refine" if score < 7 and iterations < max, otherwise "process_images".
     """
     score = state.get("critique_score", 0.0)
     iteration = state.get("iteration_count", 0)
@@ -35,12 +37,12 @@ def should_refine(state: AgentState) -> Literal["refine", "end"]:
     # If score is good enough, approve
     if score >= 7.0:
         logger.info(f"Prompts approved with score {score}/10")
-        return "end"
+        return "process_images"
     
     # If we've hit max iterations, stop even if score is low
     if iteration >= max_iterations:
         logger.warning(f"Max iterations ({max_iterations}) reached, stopping refinement")
-        return "end"
+        return "process_images"
     
     # Otherwise, refine
     logger.info(f"Score {score}/10 below threshold, refining (iteration {iteration + 1}/{max_iterations})")
@@ -64,13 +66,15 @@ def create_workflow() -> StateGraph:
     """Create the LangGraph workflow for the multi-agent system.
     
     The workflow follows this structure:
-    START → Vision → Historian → Analyst → Promptsmith → Critic → [Decision]
-                                                              ↓
-                                                        [score >= 7?]
-                                                         ↙        ↘
-                                                      YES         NO
-                                                       ↓           ↓
-                                                      END    → Promptsmith (loop)
+    START → Vision → Trend → Historian → Analyst → Promptsmith → Critic → [Decision]
+                                                                    ↓
+                                                              [score >= 7?]
+                                                               ↙        ↘
+                                                            YES         NO
+                                                             ↓           ↓
+                                                      Remove BG    → Promptsmith (loop)
+                                                             ↓
+                                                            END
     
     Returns:
         Compiled StateGraph ready for execution.
@@ -80,15 +84,18 @@ def create_workflow() -> StateGraph:
     
     # Add agent nodes
     workflow.add_node("vision", vision_agent)
+    workflow.add_node("trend", trend_agent)
     workflow.add_node("historian", historian_agent)
     workflow.add_node("analyst", analyst_agent)
     workflow.add_node("promptsmith", promptsmith_agent)
     workflow.add_node("critic", critic_agent)
     workflow.add_node("increment", increment_iteration)
+    workflow.add_node("background_remover", background_remover)
     
     # Define the flow
     workflow.set_entry_point("vision")
-    workflow.add_edge("vision", "historian")
+    workflow.add_edge("vision", "trend") # [NEW]
+    workflow.add_edge("trend", "historian") # [NEW]
     workflow.add_edge("historian", "analyst")
     workflow.add_edge("analyst", "promptsmith")
     workflow.add_edge("promptsmith", "critic")
@@ -99,12 +106,15 @@ def create_workflow() -> StateGraph:
         should_refine,
         {
             "refine": "increment",
-            "end": END,
+            "process_images": "background_remover", # [MODIFIED]
         },
     )
     
     # After incrementing, go back to promptsmith
     workflow.add_edge("increment", "promptsmith")
+    
+    # End after background removal
+    workflow.add_edge("background_remover", END)
     
     # Compile the graph
     return workflow.compile()
@@ -150,9 +160,11 @@ def run_workflow(
         "vision_analysis": "",
         "style_context": [],
         "master_strategy": "",
+        "market_trends": "",
         "current_prompts": [],
         "critique_feedback": "",
         "critique_score": 0.0,
+        "is_safe_for_print": False,
         "generated_images": [],
         "messages": [],
         "iteration_count": 0,
@@ -205,9 +217,11 @@ def stream_workflow(
         "vision_analysis": "",
         "style_context": [],
         "master_strategy": "",
+        "market_trends": "",
         "current_prompts": [],
         "critique_feedback": "",
         "critique_score": 0.0,
+        "is_safe_for_print": False,
         "generated_images": [],
         "messages": [],
         "iteration_count": 0,

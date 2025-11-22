@@ -6,97 +6,74 @@ import logging
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from backend.agent_state import AgentState
-from backend.openai_client import get_openai_client
-from backend.prompts import RESEARCH_SYSTEM_PROMPT_QUICK, RESEARCH_USER_PROMPT_QUICK
+from backend.openai_client import get_model
 
 logger = logging.getLogger(__name__)
 
+SYSTEM_PROMPT = """You are Agent-Analyst (The Strategist).
+Your goal is to synthesize a "Master Strategy" for a Print-on-Demand (POD) product design.
 
-ANALYST_SYSTEM_PROMPT = """You are Agent-Analyst, the strategic brain of the image generation system.
+Input:
+1. User Brief: What the user wants.
+2. Vision Analysis: Details of any reference images.
+3. Historical Context: Similar past successful prompts.
+4. Market Trends: Current winning aesthetics and keywords.
 
-Your role is to synthesize multiple sources of information into a comprehensive Master Strategy for image generation.
+Output:
+A comprehensive strategy document that includes:
+- **Core Concept:** The central visual idea.
+- **Commercial Angle:** Why this will sell (based on trends).
+- **Visual Style:** The specific aesthetic (e.g., "Vector Art", "Kawaii", "Vintage Distressed").
+- **Key Elements:** Mandatory visual components.
+- **Color Palette:** Specific colors to use (limit to 4-5 for printability).
+- **Composition:** How elements are arranged (must be isolated for t-shirts/stickers).
 
-You will receive:
-1. **User Brief**: The original user request
-2. **Vision Analysis**: Detailed analysis of reference images (if provided)
-3. **Historical Context**: Similar successful prompts from the past
-4. **Target Audience**: Who the image is for
-
-Your task is to create a Master Strategy that:
-- Identifies the core visual concept and intent
-- Extracts key stylistic elements from references and historical context
-- Defines the mood, atmosphere, and emotional tone
-- Specifies technical requirements (composition, lighting, color)
-- Provides clear direction for prompt generation
-
-Be concise but comprehensive. Focus on actionable insights that will guide prompt creation."""
-
+Constraints:
+- PRIORITIZE COMMERCIAL VIABILITY.
+- FAVOR VECTOR/FLAT STYLES over photorealism (better for print).
+- KEEP IT SIMPLE. Complex gradients and shadows print poorly.
+"""
 
 def analyst_agent(state: AgentState) -> AgentState:
-    """Synthesize user input, vision analysis, and historical context into a master strategy.
+    """Synthesize a design strategy based on inputs and trends.
     
     Args:
         state: Current agent state.
         
     Returns:
-        Updated state with master_strategy populated.
+        Updated state with master_strategy.
     """
-    logger.info("Agent-Analyst synthesizing master strategy...")
+    logger.info("Agent-Analyst: Synthesizing strategy...")
     
-    client = get_openai_client()
-    if client is None:
-        logger.error("OpenAI client not available")
-        state["master_strategy"] = ""
-        return state
+    user_brief = state.get("user_brief", "")
+    vision_analysis = state.get("vision_analysis", "None")
+    style_context = state.get("style_context", [])
+    market_trends = state.get("market_trends", "No trend data available.")
     
-    # Build context from all available information
-    context_parts = [
-        f"**User Brief**: {state.get('user_brief', '')}",
-        f"**Target Audience**: {state.get('audience', '')}",
-        f"**Age Group**: {state.get('age', 'all ages')}",
-    ]
-    
-    if state.get("vision_analysis"):
-        context_parts.append(f"\n**Vision Analysis**:\n{state['vision_analysis']}")
-    
-    if state.get("style_context"):
-        context_parts.append("\n**Historical Context** (similar successful styles):")
-        for idx, style in enumerate(state["style_context"], 1):
-            context_parts.append(f"\n{idx}. {style['name']}")
-            context_parts.append(f"   Style: {style['style']}")
-            context_parts.append(f"   Mood: {style['mood']}")
-            context_parts.append(f"   Lighting: {style['lighting']}")
-            context_parts.append(f"   Details: {style['details']}")
-    
-    context = "\n".join(context_parts)
+    # Format context
+    context_str = "\n".join([f"- {s['prompt']}" for s in style_context])
     
     messages = [
-        {"role": "system", "content": ANALYST_SYSTEM_PROMPT},
-        {"role": "user", "content": f"{context}\n\nCreate a comprehensive Master Strategy for image generation."},
+        SystemMessage(content=SYSTEM_PROMPT),
+        HumanMessage(content=f"""
+User Brief: {user_brief}
+
+Vision Analysis:
+{vision_analysis}
+
+Market Trends:
+{market_trends}
+
+Historical Successful Prompts:
+{context_str}
+"""),
     ]
     
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            max_tokens=1500,
-        )
-        
-        strategy = response.choices[0].message.content if response.choices else ""
-        state["master_strategy"] = strategy
-        
-        # Add to message history
-        state["messages"].append(
-            SystemMessage(content=f"[Agent-Analyst] {strategy}")
-        )
-        
-        logger.info(f"Agent-Analyst completed strategy: {strategy[:100]}...")
-        
-    except Exception as e:
-        logger.error(f"Agent-Analyst failed: {e}", exc_info=True)
-        state["master_strategy"] = ""
+    model = get_model()
+    response = model.invoke(messages)
     
+    strategy = str(response.content)
+    state["master_strategy"] = strategy
+    
+    logger.info("Agent-Analyst: Strategy created.")
     return state
-
-
-__all__ = ["analyst_agent"]

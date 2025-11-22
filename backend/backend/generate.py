@@ -167,6 +167,7 @@ def _generate_with_agents(req: GenerateRequest) -> dict[str, Any]:
                 "vision_analysis": final_state.get("vision_analysis", ""),
                 "style_context": final_state.get("style_context", []),
                 "master_strategy": final_state.get("master_strategy", ""),
+                "market_trends": final_state.get("market_trends", ""),
                 "critique_score": final_state.get("critique_score", 0.0),
                 "iteration_count": final_state.get("iteration_count", 0),
             },

@@ -1,19 +1,22 @@
-# IMDAI Image Prompt App
+# IMDAI - POD Merch Swarm
 
-A focused workspace for turning a single brief into sellable vector prompt ideas and ready-to-render image outputs. The app runs a three-stage pipeline – **Research → Synthesis → Images** – powered by OpenAI's Responses and Images APIs.
+A specialized AI system for creating **commercial-ready Print-on-Demand (POD) designs**. Powered by a multi-agent swarm that hunts trends, generates vector-optimized prompts, and auto-processes images for t-shirts, stickers, and merch.
 
-## What Changed
+## Key Features
 
-- One-click pipeline that captures research insights, assembles up to five prompt variants, and renders images for each prompt.
-- Dedicated modes for **research-only**, **synthesis-only**, or **images-only** reruns without repeating the whole flow.
-- Strict JSON contracts enforced through the OpenAI Responses API with `response_format.type="json_schema"`.
-- Consistent `input_text` content parts for all Responses API calls and image generation via `gpt-image-1` at `1536x1024`.
+- 🔍 **Trend Hunting** - Agent-Trend searches live market data for winning aesthetics and bestsellers
+- 🎨 **POD-Optimized Prompts** - Hardcoded constraints for vector art, white backgrounds, and clean printable designs
+- ✂️ **Auto-Background Removal** - Post-processing node strips backgrounds using `rembg` for transparent PNGs
+- 🤖 **Multi-Agent Collaboration** - Vision → Trend → Historian → Analyst → Promptsmith → Critic workflow
+- 🔄 **Quality Refinement Loop** - Automatic iteration until designs meet commercial standards
 
 ## Tech Stack
 
-- **Backend**: FastAPI, Pydantic v2, httpx, python-dotenv, OpenAI SDK ≥ 1.50
+- **Backend**: FastAPI, Pydantic v2, LangGraph, LangChain
 - **Frontend**: React, Vite, TypeScript
-- **AI Models**: `gpt-4.1-nano` (Responses API with optional `web_search`), `gpt-image-1` (Images API)
+- **AI Models**: GPT-4o (chat), DALL-E 3 (image generation)
+- **POD Tools**: `duckduckgo-search` (trend hunting), `rembg` (background removal)
+- **Vector DB**: ChromaDB (RAG for historical prompts)
 
 ## Prerequisites
 

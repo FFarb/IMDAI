@@ -69,6 +69,7 @@ export interface AgentSystemOutput {
     similarity_score: number;
   }>;
   master_strategy: string;
+  market_trends?: string;
   critique_score: number;
   iteration_count: number;
 }

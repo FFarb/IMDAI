@@ -8,36 +8,40 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from backend.agent_state import AgentState
 from backend.openai_client import get_openai_client
-from backend.prompts import SYNTHESIS_SYSTEM_PROMPT, SYNTHESIS_USER_PROMPT_CREATIVE
 
 logger = logging.getLogger(__name__)
 
 
-PROMPTSMITH_SYSTEM_PROMPT = """You are Agent-Promptsmith, the creative prompt generator for image generation.
+PROMPTSMITH_SYSTEM_PROMPT = """You are Agent-Promptsmith (The Creator).
+Your goal is to write high-quality DALL-E 3 prompts for Print-on-Demand (POD) products.
 
-Your role is to transform the Master Strategy into high-quality image generation prompts.
+Input:
+- Master Strategy: The design plan.
+- Critique Feedback: Feedback from previous iterations (if any).
 
-You will receive:
-1. **Master Strategy**: Comprehensive strategic direction
-2. **Critique Feedback**: Feedback from previous iteration (if this is a refinement loop)
-3. **Number of Variants**: How many different prompts to create
+Output:
+A JSON object with a list of prompts.
+Schema:
+{
+    "prompts": [
+        {
+            "positive": "The full DALL-E 3 prompt...",
+            "negative": "Things to avoid..."
+        }
+    ]
+}
 
-For each prompt, provide:
-- **Positive Prompt**: Detailed description of what to generate (be specific and vivid)
-- **Negative Prompt**: What to avoid (common artifacts, unwanted elements)
-- **Notes**: Brief explanation of the creative choices
+MANDATORY POD CONSTRAINTS (Hardcoded):
+- **Background:** ALWAYS "isolated on a pure white background" or "transparent background".
+- **Style:** "Vector art", "flat design", "clean lines", "high contrast".
+- **Composition:** "Centered", "no cutoff", "full subject visible".
+- **Forbidden:** "Complex gradients", "photorealistic noise", "shadows", "text" (unless specified).
 
-Format your response as:
+The prompt MUST include: "t-shirt design", "sticker design", "vector style", "white background".
 
-PROMPT 1:
-Positive: [detailed positive prompt]
-Negative: [comma-separated negative terms]
-Notes: [brief explanation]
-
-PROMPT 2:
-...
-
-If you received critique feedback, address the specific concerns raised while maintaining the core vision."""
+Negative Prompts (Hardcoded):
+- "photo", "realistic", "noise", "complex background", "text", "watermark", "cut off", "blurry", "low quality"
+"""
 
 
 def promptsmith_agent(state: AgentState) -> AgentState:

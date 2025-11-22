@@ -1,101 +1,26 @@
 import { useState } from 'react';
-import { ResearchBoard } from './ResearchBoard';
+import { generatePipeline } from '../api/generate';
 import { GalleryGrid } from './GalleryGrid';
-import type { BriefValues, ImageResult, ResearchOutput, StreamEvent, SynthesisOutput, SynthesisPrompt } from '../types/pipeline';
-
-
-async function postJson<T>(url: string, payload: unknown): Promise<T> {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    const detail = typeof data?.detail === 'string' ? data.detail : 'Request failed';
-    throw new Error(detail);
-  }
-  return data as T;
-}
-
-async function runResearch(brief: BriefValues): Promise<ResearchOutput> {
-  return postJson<ResearchOutput>('/api/research', {
-    topic: brief.topic,
-    audience: brief.audience,
-    age: brief.age,
-    research_mode: brief.research_mode,
-    model: brief.research_model,
-    reasoning_effort: brief.reasoning_effort,
-  });
-}
-
-async function runSynthesis(brief: BriefValues, research: ResearchOutput): Promise<SynthesisOutput> {
-  return postJson<SynthesisOutput>('/api/synthesize', {
-    research_text: research.analysis,
-    audience: brief.audience,
-    age: brief.age,
-    variants: brief.variants,
-    synthesis_mode: brief.synthesis_mode,
-  });
-}
-
-async function runImageGeneration(brief: BriefValues, prompt: SynthesisPrompt): Promise<ImageResult[]> {
-  const payload = await postJson<{ data: ImageResult[] }>('/api/images', {
-    prompt_positive: prompt.positive,
-    prompt_negative: prompt.negative,
-    n: brief.images_per_prompt,
-    model: brief.image_model,
-    quality: brief.image_quality,
-    size: brief.image_size,
-  });
-  return payload.data;
-}
+import type { BriefValues, ImageResult, AgentGenerateResponse } from '../types/pipeline';
 
 interface PromptTabsProps {
   brief: BriefValues;
   isBriefLoading: boolean;
-  research: ResearchOutput | null;
-  synthesis: SynthesisOutput | null;
-  images: ImageResult[][];
-  setResearch: (research: ResearchOutput | null) => void;
-  setSynthesis: (synthesis: SynthesisOutput | null) => void;
-  setImages: (images: ImageResult[][]) => void;
   onClearPipeline: () => void;
   autosave: boolean;
   setAutosave: (value: boolean) => void;
-  // Multi-agent props
-  agentEvents: StreamEvent[];
-  setAgentEvents: (events: StreamEvent[]) => void;
-  isAgentActive: boolean;
-  setIsAgentActive: (active: boolean) => void;
 }
-
-
-type TabName = 'research' | 'synthesis' | 'images';
-
-const TABS: { id: TabName; label: string }[] = [
-  { id: 'research', label: '1. Research' },
-  { id: 'synthesis', label: '2. Prompt Builder' },
-  { id: 'images', label: '3. Image Generation' },
-];
 
 export function PromptTabs({
   brief,
   isBriefLoading,
-  research,
-  synthesis,
-  images,
-  setResearch,
-  setSynthesis,
-  setImages,
   onClearPipeline,
   autosave,
 }: PromptTabsProps) {
-  const [activeTab, setActiveTab] = useState<TabName>('research');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPromptIndex, setSelectedPromptIndex] = useState(0);
+  const [result, setResult] = useState<AgentGenerateResponse | null>(null);
+  const [images, setImages] = useState<ImageResult[][]>([]);
 
   const downloadTextFile = (content: string, filename: string) => {
     const blob = new Blob([content], { type: 'text/plain' });
@@ -128,80 +53,59 @@ export function PromptTabs({
   };
 
   const handleResetPipeline = () => {
+    setResult(null);
+    setImages([]);
+    setError(null);
     onClearPipeline();
-    setSelectedPromptIndex(0);
   };
 
-  const handleRunResearch = async () => {
+  const handleGenerate = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await runResearch(brief);
-      setResearch(result);
-      setSynthesis(null);
-      setImages([]);
-      setSelectedPromptIndex(0);
-      setActiveTab('synthesis');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unable to run research');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      // Call the multi-agent generate endpoint
+      const response = await generatePipeline({
+        topic: brief.topic,
+        audience: brief.audience,
+        age: brief.age,
+        variants: brief.variants,
+        images_per_prompt: brief.images_per_prompt,
+        mode: 'full',
+        use_agents: true, // Enable multi-agent system
+        visual_references: [], // TODO: Add image upload support
+        max_iterations: 3,
+        image_model: brief.image_model,
+        image_quality: brief.image_quality,
+        image_size: brief.image_size,
+        research_model: brief.research_model,
+        research_mode: brief.research_mode,
+        reasoning_effort: brief.reasoning_effort,
+        synthesis_mode: brief.synthesis_mode,
+      }) as AgentGenerateResponse;
 
-  const handleSynthesize = async () => {
-    if (!research) {
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-      const result = await runSynthesis(brief, research);
-      setSynthesis(result);
-      if (autosave) {
-        result.prompts.forEach((prompt, index) => {
-          const content = `Positive Prompt:\n${prompt.positive}\n\nNegative Prompts:\n${prompt.negative.join('\n')}`;
+      setResult(response);
+      setImages(response.images || []);
+
+      // Auto-save prompts if enabled
+      if (autosave && response.prompts) {
+        response.prompts.forEach((prompt, index) => {
+          const content = `Positive Prompt:\n${prompt.positive}\n\nNegative Prompts:\n${prompt.negative?.join('\n') || 'None'}`;
           downloadTextFile(content, `prompt_${index + 1}.txt`);
         });
       }
-      setImages([]);
-      setSelectedPromptIndex(0);
-      setActiveTab('images');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unable to synthesize prompts');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  const handleGenerateImages = async () => {
-    if (!synthesis?.prompts.length) {
-      return;
-    }
-    const prompt = synthesis.prompts[selectedPromptIndex];
-    if (!prompt) {
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    try {
-      const result = await runImageGeneration(brief, prompt);
-      if (autosave) {
-        const promptNum = selectedPromptIndex + 1;
-        const existingImageCount = images[selectedPromptIndex]?.length ?? 0;
-        result.forEach((item, index) => {
-          if (item.b64_json) {
-            const imageNum = existingImageCount + index + 1;
-            downloadImageFile(item.b64_json, `image_p${promptNum}_${imageNum}.png`);
-          }
+      // Auto-save images if enabled
+      if (autosave && response.images) {
+        response.images.forEach((promptImages, promptIndex) => {
+          promptImages.forEach((item, imageIndex) => {
+            if (item.b64_json) {
+              downloadImageFile(item.b64_json, `image_p${promptIndex + 1}_${imageIndex + 1}.png`);
+            }
+          });
         });
       }
-      const nextImages = images.slice();
-      nextImages[selectedPromptIndex] = result;
-      setImages(nextImages);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unable to generate images');
+      setError(err instanceof Error ? err.message : 'Unable to generate designs');
     } finally {
       setIsLoading(false);
     }
@@ -210,17 +114,7 @@ export function PromptTabs({
   return (
     <section className="card">
       <div className="tab-row">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            className={`tab ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-            disabled={isLoading}
-          >
-            {tab.label}
-          </button>
-        ))}
+        <h2>POD Design Generation</h2>
         <button type="button" className="secondary" onClick={handleResetPipeline} disabled={isLoading}>
           Clear Results
         </button>
@@ -229,81 +123,213 @@ export function PromptTabs({
       {error ? <div className="error-box">{error}</div> : null}
 
       <div className="tab-content">
-        {activeTab === 'research' && (
-          <div>
-            <div className="card-actions">
-              <button
-                type="button"
-                className="primary"
-                onClick={handleRunResearch}
-                disabled={isLoading || isBriefLoading || !brief.topic.trim()}
-              >
-                {isLoading ? 'Researching…' : 'Run Research'}
-              </button>
-            </div>
-            <ResearchBoard research={research} />
-          </div>
-        )}
+        {/* Generation Controls */}
+        <div className="card-actions">
+          <button
+            type="button"
+            className="primary"
+            onClick={handleGenerate}
+            disabled={isLoading || isBriefLoading || !brief.topic.trim()}
+          >
+            {isLoading ? '🤖 AI Swarm Working...' : '🚀 Generate POD Designs'}
+          </button>
+        </div>
 
-        {activeTab === 'synthesis' && (
-          <div>
-            <div className="card-actions">
-              <button
-                type="button"
-                className="primary"
-                onClick={handleSynthesize}
-                disabled={isLoading || !research}
-              >
-                {isLoading ? 'Synthesizing…' : 'Synthesize Prompts'}
-              </button>
-            </div>
-            <ResearchBoard research={research} />
-            {synthesis ? (
-              <div className="synthesis-preview">
-                <h3>Prompt Variants</h3>
-                <ul>
-                  {synthesis.prompts.map((prompt, index) => (
-                    <li key={`prompt-${index}`}>
-                      <strong>{`Prompt ${index + 1}`}:</strong> {prompt.positive}
-                    </li>
-                  ))}
-                </ul>
-                <details className="raw-text-preview">
-                  <summary>View raw prompt text</summary>
-                  <pre>{synthesis.raw_text}</pre>
-                </details>
+        {/* Agent System Info */}
+        {result?.agent_system && (
+          <div className="agent-info">
+            <h3>🎯 Multi-Agent Analysis</h3>
+            <div className="info-grid">
+              {result.agent_system.market_trends && (
+                <div className="info-card">
+                  <strong>📈 Market Trends:</strong>
+                  <p>{result.agent_system.market_trends.substring(0, 200)}...</p>
+                </div>
+              )}
+              {result.agent_system.master_strategy && (
+                <div className="info-card">
+                  <strong>🧠 Strategy:</strong>
+                  <p>{result.agent_system.master_strategy.substring(0, 200)}...</p>
+                </div>
+              )}
+              <div className="info-card">
+                <strong>⭐ Quality Score:</strong>
+                <p>{result.agent_system.critique_score}/10</p>
               </div>
-            ) : null}
+              <div className="info-card">
+                <strong>🔄 Iterations:</strong>
+                <p>{result.agent_system.iteration_count}</p>
+              </div>
+            </div>
           </div>
         )}
 
-        {activeTab === 'images' && (
-          <div>
-            <div className="card-actions">
-              <select
-                value={selectedPromptIndex}
-                onChange={(event) => setSelectedPromptIndex(Number(event.target.value))}
-                disabled={isLoading || !synthesis?.prompts.length}
-              >
-                {synthesis?.prompts.map((_, index) => (
-                  <option key={`prompt-option-${index}`} value={index}>
-                    {`Prompt ${index + 1}`}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="primary"
-                onClick={handleGenerateImages}
-                disabled={isLoading || !synthesis?.prompts.length}
-              >
-                {isLoading ? 'Generating…' : `Generate Images (${brief.images_per_prompt})`}
-              </button>
+        {/* Generated Prompts */}
+        {result?.prompts && result.prompts.length > 0 && (
+          <div className="prompts-section">
+            <h3>✨ Generated Prompts</h3>
+            <div className="prompts-grid">
+              {result.prompts.map((prompt, index) => (
+                <div key={`prompt-${index}`} className="prompt-card">
+                  <h4>Prompt {index + 1}</h4>
+                  <div className="prompt-content">
+                    <strong>Positive:</strong>
+                    <p>{prompt.positive}</p>
+                    {prompt.negative && prompt.negative.length > 0 && (
+                      <>
+                        <strong>Negative:</strong>
+                        <p>{prompt.negative.join(', ')}</p>
+                      </>
+                    )}
+                    {prompt.notes && (
+                      <>
+                        <strong>Notes:</strong>
+                        <p>{prompt.notes}</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-            <GalleryGrid prompts={synthesis?.prompts ?? null} images={images} isLoading={isLoading} />
+          </div>
+        )}
+
+        {/* Generated Images */}
+        {images.length > 0 && (
+          <div className="images-section">
+            <h3>🎨 Generated Images</h3>
+            <GalleryGrid
+              prompts={result?.prompts ?? null}
+              images={images}
+              isLoading={isLoading}
+            />
+          </div>
+        )}
+
+        {/* Loading State */}
+        {isLoading && (
+          <div className="loading-state">
+            <div className="spinner"></div>
+            <p>🤖 AI Agents are collaborating...</p>
+            <p className="loading-detail">Vision → Trend → Historian → Analyst → Promptsmith → Critic → Post-Process</p>
           </div>
         )}
       </div>
+
+      <style>{`
+        .agent-info {
+          margin: 2rem 0;
+          padding: 1.5rem;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-radius: 12px;
+          color: white;
+        }
+
+        .agent-info h3 {
+          margin-top: 0;
+          font-size: 1.5rem;
+        }
+
+        .info-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 1rem;
+          margin-top: 1rem;
+        }
+
+        .info-card {
+          background: rgba(255, 255, 255, 0.1);
+          padding: 1rem;
+          border-radius: 8px;
+          backdrop-filter: blur(10px);
+        }
+
+        .info-card strong {
+          display: block;
+          margin-bottom: 0.5rem;
+          font-size: 0.9rem;
+        }
+
+        .info-card p {
+          margin: 0;
+          font-size: 0.95rem;
+          line-height: 1.5;
+        }
+
+        .prompts-section {
+          margin: 2rem 0;
+        }
+
+        .prompts-section h3 {
+          margin-bottom: 1rem;
+        }
+
+        .prompts-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 1.5rem;
+        }
+
+        .prompt-card {
+          border: 2px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 1.5rem;
+          background: #f8fafc;
+        }
+
+        .prompt-card h4 {
+          margin-top: 0;
+          color: #667eea;
+        }
+
+        .prompt-content strong {
+          display: block;
+          margin-top: 1rem;
+          margin-bottom: 0.5rem;
+          color: #4a5568;
+          font-size: 0.9rem;
+        }
+
+        .prompt-content p {
+          margin: 0;
+          color: #2d3748;
+          line-height: 1.6;
+        }
+
+        .images-section {
+          margin: 2rem 0;
+        }
+
+        .images-section h3 {
+          margin-bottom: 1rem;
+        }
+
+        .loading-state {
+          text-align: center;
+          padding: 3rem;
+        }
+
+        .spinner {
+          border: 4px solid #f3f4f6;
+          border-top: 4px solid #667eea;
+          border-radius: 50%;
+          width: 50px;
+          height: 50px;
+          animation: spin 1s linear infinite;
+          margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        .loading-detail {
+          font-size: 0.9rem;
+          color: #6b7280;
+          margin-top: 0.5rem;
+        }
+      `}</style>
     </section>
   );
 }
