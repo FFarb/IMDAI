@@ -39,6 +39,7 @@ export interface GenerateRequest {
   history_count?: number;
   skip_research?: boolean;
   provided_strategy?: any;
+  use_smart_recall?: boolean;
 
   // Research parameters
   research_model?: string;
@@ -72,7 +73,7 @@ export interface AgentSystemOutput {
     lighting: string;
     similarity_score: number;
   }>;
-  master_strategy: string;
+  master_strategy: string | any;
   market_trends?: string;
   critique_score: number;
   iteration_count: number;
@@ -86,6 +87,7 @@ export interface AgentGenerateResponse {
     notes?: string | null;
   }>;
   images: ImageResult[][];
+  generation_ids?: number[];  // IDs for approving/saving to library
 }
 
 // SSE event types

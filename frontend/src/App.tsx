@@ -1,6 +1,10 @@
+import { useState } from 'react';
 import { ImageLabPage } from './pages/ImageLabPage';
+import { LibraryTab } from './components/LibraryTab';
 
 function App(): JSX.Element {
+  const [activeTab, setActiveTab] = useState<'generator' | 'library'>('generator');
+
   return (
     <div className="app-shell">
       <header className="app-header app-header--global">
@@ -10,8 +14,29 @@ function App(): JSX.Element {
         </div>
       </header>
 
+      <nav style={{
+        display: 'flex',
+        gap: '1rem',
+        padding: '1rem 2rem',
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--surface)'
+      }}>
+        <button
+          onClick={() => setActiveTab('generator')}
+          className={activeTab === 'generator' ? 'btn-primary' : 'btn-secondary'}
+        >
+          🎨 Generator
+        </button>
+        <button
+          onClick={() => setActiveTab('library')}
+          className={activeTab === 'library' ? 'btn-primary' : 'btn-secondary'}
+        >
+          📚 Library
+        </button>
+      </nav>
+
       <section className="tab-panel">
-        <ImageLabPage />
+        {activeTab === 'generator' ? <ImageLabPage /> : <LibraryTab />}
       </section>
     </div>
   );

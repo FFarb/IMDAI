@@ -236,29 +236,19 @@ export function BriefCard({ values, onChange, isLoading }: BriefCardProps) {
         </label>
 
         <label className="field">
-          <span>Prompt Variants</span>
+          <span>Number of Designs (Prompts)</span>
           <input
             type="number"
             name="variants"
             min={1}
-            max={5}
+            max={10}
             value={values.variants}
             onChange={handleInput}
             disabled={isLoading}
           />
-        </label>
-
-        <label className="field">
-          <span>Images per Prompt</span>
-          <input
-            type="number"
-            name="images_per_prompt"
-            min={1}
-            max={4}
-            value={values.images_per_prompt}
-            onChange={handleInput}
-            disabled={isLoading}
-          />
+          <p className="field-hint" style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: '0.25rem' }}>
+            Each design generates 1 unique image
+          </p>
         </label>
 
         <label className="field">
@@ -285,6 +275,20 @@ export function BriefCard({ values, onChange, isLoading }: BriefCardProps) {
             onChange={handleInput}
             disabled={isLoading}
           />
+        </label>
+
+        <label className="field" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <input
+            type="checkbox"
+            name="use_smart_recall"
+            checked={values.use_smart_recall ?? true}
+            onChange={(e) => onChange({ use_smart_recall: e.target.checked })}
+            disabled={isLoading}
+            style={{ width: 'auto', margin: 0 }}
+          />
+          <span title="Uses your past successful designs to guide the new strategy">
+            ✨ Use Smart Recall
+          </span>
         </label>
       </div>
     </section>

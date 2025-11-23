@@ -119,12 +119,64 @@ Quality: {preset_data.get('quality', '')}
     return len(documents)
 
 
-def retrieve_similar_styles(query: str, k: int = 3) -> list[dict[str, Any]]:
+
+def index_strategy(strategy_id: str, strategy_name: str, strategy_data: dict[str, Any]) -> str:
+    """Index a single strategy into ChromaDB.
+    
+    Args:
+        strategy_id: Unique ID for the strategy.
+        strategy_name: Name of the strategy.
+        strategy_data: Dictionary containing strategy details.
+        
+    Returns:
+        The document ID used in ChromaDB.
+    """
+    collection = init_vector_store()
+    
+    # Initialize OpenAI embeddings
+    embeddings_model = OpenAIEmbeddings(
+        model="text-embedding-3-small",
+        openai_api_key=os.getenv("OPENAI_API_KEY"),
+    )
+    
+    # Create a rich text representation for embedding
+    doc_text = f"""
+Strategy: {strategy_name}
+Subject: {strategy_data.get('core_subject', '')}
+Style: {strategy_data.get('visual_style', '')}
+Composition: {strategy_data.get('composition', '')}
+Mood: {strategy_data.get('mood', '')}
+Constraints: {strategy_data.get('technical_constraints', '')}
+Commercial Hook: {strategy_data.get('commercial_hook', '')}
+    """.strip()
+    
+    # Generate embedding
+    embedding = embeddings_model.embed_query(doc_text)
+    
+    # Add to ChromaDB
+    doc_id = f"strategy_{strategy_id}"
+    collection.upsert(
+        documents=[doc_text],
+        embeddings=[embedding],
+        metadatas=[{
+            "name": strategy_name,
+            "type": "user_strategy",
+            "is_favorite": True,
+            **{k: str(v) for k, v in strategy_data.items() if isinstance(v, (str, int, float, bool))}
+        }],
+        ids=[doc_id],
+    )
+    
+    return doc_id
+
+
+def retrieve_similar_styles(query: str, k: int = 3, filter_favorites: bool = False) -> list[dict[str, Any]]:
     """Retrieve similar style presets based on a query.
     
     Args:
         query: Search query (user brief + vision analysis).
         k: Number of similar styles to retrieve.
+        filter_favorites: If True, only retrieve items marked as favorites.
         
     Returns:
         List of similar style presets with metadata.
@@ -144,10 +196,14 @@ def retrieve_similar_styles(query: str, k: int = 3) -> list[dict[str, Any]]:
     # Generate query embedding
     query_embedding = embeddings_model.embed_query(query)
     
+    # Prepare filter
+    where_filter = {"is_favorite": True} if filter_favorites else None
+    
     # Search for similar styles
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=min(k, collection.count()),
+        where=where_filter
     )
     
     # Format results
@@ -156,18 +212,19 @@ def retrieve_similar_styles(query: str, k: int = 3) -> list[dict[str, Any]]:
         for metadata, distance in zip(results["metadatas"][0], results["distances"][0]):
             similar_styles.append({
                 "name": metadata.get("name", "Unknown"),
-                "subject": metadata.get("subject", ""),
-                "style": metadata.get("style", ""),
+                "subject": metadata.get("core_subject", metadata.get("subject", "")),
+                "style": metadata.get("visual_style", metadata.get("style", "")),
                 "composition": metadata.get("composition", ""),
                 "lighting": metadata.get("lighting", ""),
                 "mood": metadata.get("mood", ""),
                 "details": metadata.get("details", ""),
                 "quality": metadata.get("quality", ""),
                 "similarity_score": 1 - distance,  # Convert distance to similarity
+                "raw_metadata": metadata
             })
     
-    logger.info(f"Retrieved {len(similar_styles)} similar styles for query: {query[:50]}...")
+    logger.info(f"Retrieved {len(similar_styles)} similar styles for query: {query[:50]}... (Filter: {filter_favorites})")
     return similar_styles
 
 
-__all__ = ["init_vector_store", "seed_presets", "retrieve_similar_styles"]
+__all__ = ["init_vector_store", "seed_presets", "retrieve_similar_styles", "index_strategy"]

@@ -71,7 +71,7 @@ def analyst_agent(state: AgentState) -> AgentState:
     market_trends = state.get("market_trends", "No trend data available.")
     
     # Format context
-    context_str = "\n".join([f"- {s['prompt']}" for s in style_context])
+    context_str = "\n".join([f"- {s.get('name', 'Unknown')}: {s.get('style', '')} - {s.get('subject', '')}" for s in style_context])
     
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),

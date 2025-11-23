@@ -1,8 +1,5 @@
-"""Search tool using DuckDuckGo."""
-from __future__ import annotations
-
 import logging
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 logger = logging.getLogger(__name__)
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Literal
 
 from langchain_core.messages import BaseMessage
@@ -11,13 +12,56 @@ from backend.agent_state import AgentState
 from backend.agents import (
     analyst_agent,
     critic_agent,
+    generator_agent,
     historian_agent,
+    marketer_agent,
     promptsmith_agent,
+    rag_archiver_agent,
     trend_agent,
     vision_agent,
-    marketer_agent,
 )
 from backend.post_processing import background_remover
+from backend.tools.upscaler import Upscaler
+from backend.tools.vectorizer import Vectorizer
+
+logger = logging.getLogger(__name__)
+
+
+def upscaler_node(state: AgentState) -> AgentState:
+    """Upscale an image.
+    
+    Expects 'target_image' path in state.
+    """
+    target = state.get("target_image")
+    if not target:
+        return state
+        
+    upscaler = Upscaler()
+    try:
+        output_path = Path(target).parent / "master.png"
+        upscaler.upscale(target, output_path)
+        # In a real scenario, we'd update state or DB
+    except Exception as e:
+        logger.error(f"Upscaling failed: {e}")
+    return state
+
+
+def vectorizer_node(state: AgentState) -> AgentState:
+    """Vectorize an image.
+    
+    Expects 'target_image' path in state.
+    """
+    target = state.get("target_image")
+    if not target:
+        return state
+        
+    vectorizer = Vectorizer()
+    try:
+        output_path = Path(target).parent / "vector.svg"
+        vectorizer.vectorize(target, output_path)
+    except Exception as e:
+        logger.error(f"Vectorization failed: {e}")
+    return state
 
 logger = logging.getLogger(__name__)
 
@@ -91,13 +135,19 @@ def create_workflow() -> StateGraph:
     workflow.add_node("promptsmith", promptsmith_agent)
     workflow.add_node("critic", critic_agent)
     workflow.add_node("increment", increment_iteration)
+    workflow.add_node("generator", generator_agent) # [NEW]
     workflow.add_node("background_remover", background_remover)
     workflow.add_node("marketer", marketer_agent)
+    workflow.add_node("rag_archiver", rag_archiver_agent) # [NEW] - Saves to RAG, not library
+    
+    # Production nodes (not auto-run, connected to endpoints)
+    workflow.add_node("upscaler", upscaler_node) 
+    workflow.add_node("vectorizer", vectorizer_node)
     
     # Define the flow
     workflow.set_entry_point("vision")
-    workflow.add_edge("vision", "trend") # [NEW]
-    workflow.add_edge("trend", "historian") # [NEW]
+    workflow.add_edge("vision", "trend")
+    workflow.add_edge("trend", "historian")
     workflow.add_edge("historian", "analyst")
     workflow.add_edge("analyst", "promptsmith")
     workflow.add_edge("promptsmith", "critic")
@@ -108,17 +158,18 @@ def create_workflow() -> StateGraph:
         should_refine,
         {
             "refine": "increment",
-            "process_images": "background_remover", # [MODIFIED]
+            "process_images": "generator", # [MODIFIED] -> Goes to generator first
         },
     )
     
     # After incrementing, go back to promptsmith
     workflow.add_edge("increment", "promptsmith")
     
-    # End after background removal
-    # End after background removal
+    # Generation flow
+    workflow.add_edge("generator", "background_remover")
     workflow.add_edge("background_remover", "marketer")
-    workflow.add_edge("marketer", END)
+    workflow.add_edge("marketer", "rag_archiver")
+    workflow.add_edge("rag_archiver", END)
     
     # Compile the graph
     return workflow.compile()
@@ -133,7 +184,6 @@ def run_workflow(
     images_per_prompt: int = 1,
     image_model: str = "dall-e-3",
     image_quality: str = "standard",
-    image_size: str = "1024x1024",
     image_size: str = "1024x1024",
     max_iterations: int = 3,
     trend_count: int = 3,
@@ -185,6 +235,11 @@ def run_workflow(
         "image_model": image_model,
         "image_quality": image_quality,
         "image_size": image_size,
+        "trend_count": trend_count,
+        "history_count": history_count,
+        "skip_research": skip_research,
+        "provided_strategy": provided_strategy,
+        "use_smart_recall": True,
     }
     
     # Create and run workflow
@@ -204,7 +259,6 @@ def stream_workflow(
     images_per_prompt: int = 1,
     image_model: str = "dall-e-3",
     image_quality: str = "standard",
-    image_size: str = "1024x1024",
     image_size: str = "1024x1024",
     max_iterations: int = 3,
     trend_count: int = 3,
@@ -249,6 +303,11 @@ def stream_workflow(
         "image_model": image_model,
         "image_quality": image_quality,
         "image_size": image_size,
+        "trend_count": trend_count,
+        "history_count": history_count,
+        "skip_research": skip_research,
+        "provided_strategy": provided_strategy,
+        "use_smart_recall": True,
     }
     
     # Create and stream workflow

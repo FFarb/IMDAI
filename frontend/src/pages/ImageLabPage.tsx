@@ -4,13 +4,13 @@ import { AgentThoughtChain } from '../components/AgentThoughtChain';
 import { BriefCard } from '../components/BriefCard';
 import { ImageUpload } from '../components/ImageUpload';
 import { PromptTabs } from '../components/PromptTabs';
-import type { BriefValues, ImageResult, ResearchOutput, StreamEvent, SynthesisOutput } from '../types/pipeline';
+import type { BriefValues, ResearchOutput, StreamEvent, SynthesisOutput } from '../types/pipeline';
 
 const defaultBrief: BriefValues = {
   topic: 'Friendly dinosaurs for classroom posters',
   audience: 'Elementary school children',
   age: '6-9 years',
-  variants: 2,
+  variants: 3,
   images_per_prompt: 1,
 
   // Multi-agent
@@ -47,21 +47,15 @@ export function ImageLabPage(): JSX.Element {
     const saved = localStorage.getItem('synthesis');
     return saved ? JSON.parse(saved) : null;
   });
-  const [images, setImages] = useState<ImageResult[][]>(() => {
-    const saved = localStorage.getItem('images');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [autosave, setAutosave] = useState<boolean>(() => {
-    const saved = localStorage.getItem('autosave');
-    return saved ? JSON.parse(saved) : false;
-  });
 
   // Multi-agent state
   const [agentEvents, setAgentEvents] = useState<StreamEvent[]>([]);
   const [isAgentActive, setIsAgentActive] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('brief', JSON.stringify(brief));
+    // Exclude visual_references (large base64 data) from localStorage to avoid quota errors
+    const { visual_references, ...rest } = brief;
+    localStorage.setItem('brief', JSON.stringify(rest));
   }, [brief]);
 
   useEffect(() => {
@@ -71,14 +65,6 @@ export function ImageLabPage(): JSX.Element {
   useEffect(() => {
     localStorage.setItem('synthesis', JSON.stringify(synthesis));
   }, [synthesis]);
-
-  useEffect(() => {
-    localStorage.setItem('images', JSON.stringify(images));
-  }, [images]);
-
-  useEffect(() => {
-    localStorage.setItem('autosave', JSON.stringify(autosave));
-  }, [autosave]);
 
   const handleBriefChange = (changes: Partial<BriefValues>) => {
     setBrief((prev) => ({ ...prev, ...changes }));
@@ -91,7 +77,6 @@ export function ImageLabPage(): JSX.Element {
   const resetPipelineState = () => {
     setResearch(null);
     setSynthesis(null);
-    setImages([]);
     setAgentEvents([]);
     setIsAgentActive(false);
   };
@@ -109,17 +94,6 @@ export function ImageLabPage(): JSX.Element {
           <p>AI-Powered Image Generation with Multi-Agent Intelligence</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <div className="autosave-group">
-            <label className="autosave-toggle">
-              <input
-                type="checkbox"
-                checked={autosave}
-                onChange={(e) => setAutosave(e.target.checked)}
-              />
-              Autosave
-            </label>
-            <p className="field-hint">Saves generated files to your browser's Downloads folder.</p>
-          </div>
           <button onClick={handleReset} className="secondary">Reset State</button>
         </div>
       </header>
@@ -158,22 +132,9 @@ export function ImageLabPage(): JSX.Element {
         <PromptTabs
           brief={brief}
           isBriefLoading={isBriefLoading}
-          research={research}
-          synthesis={synthesis}
-          images={images}
-          setResearch={setResearch}
-          setSynthesis={setSynthesis}
-          setImages={setImages}
           onClearPipeline={resetPipelineState}
-          autosave={autosave}
-          setAutosave={setAutosave}
-          agentEvents={agentEvents}
-          setAgentEvents={setAgentEvents}
-          isAgentActive={isAgentActive}
-          setIsAgentActive={setIsAgentActive}
         />
       </div>
     </div>
   );
 }
-

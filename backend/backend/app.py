@@ -25,10 +25,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+
+from backend.database.store import init_db
+from backend.library import router as library_router
+from backend.production import router as production_router
+
+# Initialize DB
+init_db()
+
 app.include_router(research_router)
 app.include_router(synthesize_router)
 app.include_router(images_router)
 app.include_router(generate_router)
+app.include_router(library_router)
+app.include_router(production_router)
+
+# Mount static files
+data_dir = Path(__file__).parent.parent.parent / "data" / "library"
+data_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/library", StaticFiles(directory=data_dir), name="library")
 
 
 @app.get("/api/health")

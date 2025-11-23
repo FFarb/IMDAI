@@ -7,50 +7,19 @@ interface PromptTabsProps {
   brief: BriefValues;
   isBriefLoading: boolean;
   onClearPipeline: () => void;
-  autosave: boolean;
-  setAutosave: (value: boolean) => void;
 }
 
 export function PromptTabs({
   brief,
   isBriefLoading,
   onClearPipeline,
-  autosave,
 }: PromptTabsProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AgentGenerateResponse | null>(null);
   const [images, setImages] = useState<ImageResult[][]>([]);
 
-  const downloadTextFile = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadImageFile = (b64Json: string, filename: string) => {
-    const byteCharacters = atob(b64Json);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: 'image/png' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+  // Download functions removed - images are now saved via "Save to Library" button
 
   const handleResetPipeline = () => {
     setResult(null);
@@ -86,36 +55,31 @@ export function PromptTabs({
         history_count: brief.history_count,
         skip_research: skipResearch,
         provided_strategy: skipResearch && result?.agent_system?.master_strategy
-          ? JSON.parse(result.agent_system.master_strategy)
+          ? (typeof result.agent_system.master_strategy === 'string'
+            ? JSON.parse(result.agent_system.master_strategy)
+            : result.agent_system.master_strategy)
           : undefined,
       }) as AgentGenerateResponse;
 
       setResult(response);
       setImages(response.images || []);
 
-      // Auto-save prompts if enabled
-      if (autosave && response.prompts) {
-        response.prompts.forEach((prompt, index) => {
-          const content = `Positive Prompt:\n${prompt.positive}\n\nNegative Prompts:\n${prompt.negative?.join('\n') || 'None'}`;
-          downloadTextFile(content, `prompt_${index + 1}.txt`);
-        });
-      }
+      // NOTE: Removed autosave functionality to prevent localStorage crashes
+      // Images are now saved to library only when user explicitly approves them
+      // via the "Save to Library" button in the gallery
 
-      // Auto-save images if enabled
-      if (autosave && response.images) {
-        response.images.forEach((promptImages, promptIndex) => {
-          promptImages.forEach((item, imageIndex) => {
-            if (item.b64_json) {
-              downloadImageFile(item.b64_json, `image_p${promptIndex + 1}_${imageIndex + 1}.png`);
-            }
-          });
-        });
-      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unable to generate designs');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const renderStrategyPreview = (strategy: string | any) => {
+    if (!strategy) return '';
+    if (typeof strategy === 'string') return strategy.substring(0, 200) + '...';
+    // If it's an object (structured output), show the core subject or a summary
+    return (strategy.core_subject || JSON.stringify(strategy)).substring(0, 200) + '...';
   };
 
   return (
@@ -162,13 +126,13 @@ export function PromptTabs({
               {result.agent_system.market_trends && (
                 <div className="info-card">
                   <strong>📈 Market Trends:</strong>
-                  <p>{result.agent_system.market_trends.substring(0, 200)}...</p>
+                  <p>{(result.agent_system.market_trends || '').substring(0, 200)}...</p>
                 </div>
               )}
               {result.agent_system.master_strategy && (
                 <div className="info-card">
                   <strong>🧠 Strategy:</strong>
-                  <p>{result.agent_system.master_strategy.substring(0, 200)}...</p>
+                  <p>{renderStrategyPreview(result.agent_system.master_strategy)}</p>
                 </div>
               )}
               <div className="info-card">
@@ -221,6 +185,7 @@ export function PromptTabs({
               prompts={result?.prompts ?? null}
               images={images}
               isLoading={isLoading}
+              generationIds={result?.generation_ids}
             />
           </div>
         )}

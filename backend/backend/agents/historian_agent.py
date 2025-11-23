@@ -48,7 +48,12 @@ def historian_agent(state: AgentState) -> AgentState:
     
     try:
         # Retrieve similar styles from RAG
-        similar_styles = retrieve_similar_styles(query, k=history_count)
+        use_smart_recall = state.get("use_smart_recall", True)
+        similar_styles = retrieve_similar_styles(
+            query, 
+            k=history_count,
+            filter_favorites=use_smart_recall
+        )
         state["style_context"] = similar_styles
         
         # Format findings for message history

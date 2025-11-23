@@ -99,5 +99,8 @@ class AgentState(TypedDict):
     provided_strategy: dict | None
     """Pre-defined strategy to use when skipping research."""
 
+    use_smart_recall: bool
+    """Whether to use Smart Recall (filter by favorites) in Historian."""
+
 
 __all__ = ["AgentState"]
