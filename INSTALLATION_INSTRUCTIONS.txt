@@ -1,0 +1,51 @@
+IMDAI Installation for Mac
+==========================
+
+Quick Start:
+1. Extract this ZIP file
+2. Double-click "Setup IMDAI.command"
+3. Click "Continue" when prompted
+4. Enter your OpenAI API key
+5. Wait 2-5 minutes for installation
+6. IMDAI will launch automatically!
+
+After Installation:
+- To launch IMDAI: Double-click "Launch IMDAI.command"
+- Configuration: backend/.env
+- Logs: imdai.log
+
+Requirements:
+- macOS 10.13 (High Sierra) or later
+- Internet connection
+- OpenAI API key
+
+Get Your API Key:
+https://platform.openai.com/api-keys
+
+First Time Security Warning:
+If you see "unidentified developer" warning:
+1. Right-click "Setup IMDAI.command"
+2. Click "Open"
+3. Click "Open" again in the dialog
+(This only needs to be done once)
+
+What Gets Installed:
+✓ Python virtual environment
+✓ All Python dependencies (FastAPI, OpenAI, etc.)
+✓ Frontend build tools
+✓ All required packages
+
+Installation Time:
+- First-time setup: 2-5 minutes
+- Subsequent launches: Instant
+
+Troubleshooting:
+- If setup fails: Check internet connection
+- If Python missing: Install from python.org
+- If Node missing: Install from nodejs.org
+- For help: Check imdai.log file
+
+Support:
+For issues or questions, contact the person who sent you this package.
+
+Enjoy IMDAI! 🎨
